@@ -154,15 +154,15 @@
 (define my-canvas%
  (class canvas% 
   (define/override (on-event event)
-   (let* ((x (- (send event get-x) Scroll-offset-x))
-	  (y (- (send event get-y) Scroll-offset-y)) 
-	  (clicked (find-utterance Utterance-tree x y))) 
+   (let* ((x (- (/ (send event get-x) Zoom-factor) Scroll-offset-x))
+	  (y (- (/ (send event get-y) Zoom-factor) Scroll-offset-y))
+	  (clicked (find-utterance Utterance-tree x y)))
     (cond
      ((send event dragging?)
       (cond
        ((send event get-left-down)
-	(set! Scroll-offset-x (+ Scroll-offset-x (* 1 (+ (- (car Mouse-pos)) (send event get-x)))))
-	(set! Scroll-offset-y (+ Scroll-offset-y (- (cdr Mouse-pos)) (send event get-y)))
+	(set! Scroll-offset-x (+ Scroll-offset-x (/ (+ (- (car Mouse-pos)) (send event get-x)) Zoom-factor)))
+	(set! Scroll-offset-y (+ Scroll-offset-y (/ (+ (- (cdr Mouse-pos)) (send event get-y)) Zoom-factor)))
 	(set! Mouse-pos (cons (send event get-x) (send event get-y)))
 	(send this on-paint))))
      ((eq? (send event get-event-type) 'left-down)
@@ -200,6 +200,11 @@
      (open-u Selection #t))
     ((eq? (send event get-key-code) #\C)
      (close-u Selection #t))
+    ((eq? (send event get-key-code) #\z)
+     (set! Scroll-offset-y (- (ess-utterance-y Selection)))
+     (set! Scroll-offset-x (- (ess-utterance-x Selection)))
+     (set! Zoom-factor (if (= Zoom-factor 1) (if VERTICAL (/ HEIGHT (ess-utterance-h Selection)) (/ WIDTH (ess-utterance-w Selection ))) 1))
+     (send this on-paint))
     ((eq? (send event get-key-code) 'wheel-up)
      (if VERTICAL
       (set! Scroll-offset-y (+ SCROLLDIST Scroll-offset-y))
@@ -236,7 +241,6 @@
 
 (define (generate-utterance-tree addr)
     (set! Rows '())
-    ; (ess-addr-width ARGS (send Thecanvas get-dc))
     (set! Utterance-tree (ess-addr->ess-utterance addr 0 0 (if VERTICAL (ess-addr-width ARGS (send Thecanvas get-dc)) -1) 0 (send Thecanvas get-dc) 1))
     (set! Selection (find-utterance-from-addr Utterance-tree (ess-utterance-addr Selection))))
 
@@ -489,16 +493,16 @@
   (if
    (or
     (and (negative? (+ x w)) (not VERTICAL))
-    (> x WIDTH))
+    (> x (/ WIDTH Zoom-factor)))
    (let ((c (+ (ess-utterance-x u) (/ w 2))))
-    (set! Scroll-offset-x (- (+ c (- (/ WIDTH 2))))))
+    (set! Scroll-offset-x (- (+ c (- (/ WIDTH Zoom-factor 2))))))
    '())
   (if
    (or
     (and (negative? (+ y h)) VERTICAL)
-    (> y HEIGHT))
+    (> y (/ HEIGHT Zoom-factor)))
    (let ((c (+ (ess-utterance-y u) (/ h 2))))
-    (set! Scroll-offset-y (- (+ c (- (/ HEIGHT 2))))))
+    (set! Scroll-offset-y (- (+ c (- (/ HEIGHT Zoom-factor 2))))))
    '())))
 
 
