@@ -164,11 +164,6 @@
 	(set! Scroll-offset-x (+ Scroll-offset-x (* 1 (+ (- (car Mouse-pos)) (send event get-x)))))
 	(set! Scroll-offset-y (+ Scroll-offset-y (- (cdr Mouse-pos)) (send event get-y)))
 	(set! Mouse-pos (cons (send event get-x) (send event get-y)))
-	(send this on-paint))
-       ((send event get-right-down)
-	(set! Scroll-offset-x (+ Scroll-offset-x (- (car Mouse-pos)) (send event get-x)))
-	(set! Scroll-offset-y (+ Scroll-offset-y (- (cdr Mouse-pos)) (send event get-y)))
-	(set! Mouse-pos (cons (send event get-x) (send event get-y)))
 	(send this on-paint))))
      ((eq? (send event get-event-type) 'left-down)
       (set! Mouse-pos (cons (send event get-x) (send event get-y))))
@@ -242,7 +237,7 @@
 (define (generate-utterance-tree addr)
     (set! Rows '())
     ; (ess-addr-width ARGS (send Thecanvas get-dc))
-    (set! Utterance-tree (ess-addr->ess-utterance addr 0 0 0 (send Thecanvas get-dc) 1))
+    (set! Utterance-tree (ess-addr->ess-utterance addr 0 0 (if VERTICAL (ess-addr-width ARGS (send Thecanvas get-dc)) -1) 0 (send Thecanvas get-dc) 1))
     (set! Selection (find-utterance-from-addr Utterance-tree (ess-utterance-addr Selection))))
 
 ;------------------------------------------------------------------------------
@@ -272,15 +267,6 @@
    (ess-expr-name expr)
    (if (eq? (ess-expr-type expr) 'define) (string-append ":  " (ess-expr-name (cadr (ess-expr-args expr)))) ""))
   (let ((new-context
-;	 (foldl
-;	  (lambda (arg n con)
-;	   (if (eq? (ess-expr-type arg) 'define)
-;	    (let ((id (cadr (ess-expr-args arg))))
-;	     (hash-set con (string->symbol (ess-expr-name id)) (append laddr (list n))))
-;	    con))
-;	  context
-;	  (ess-expr-args expr)
-;	  (build-list (length (ess-expr-args expr)) values))))
 	 (apply hash-set* context
 	  (apply append
 	   (map
@@ -320,19 +306,19 @@
      (ess-man-args man)
      (build-list (length (ess-man-args man)) values))))))
 
-(define (ess-addr->ess-utterance addr x y row dc siblings)
+(define (ess-addr->ess-utterance addr x y w row dc siblings)
  (let ((children 
 	(if (closed? addr)
 	 '()
-;	 (let ((child-w (foldl max 0 (map (lambda (arg) (ess-addr-width arg dc)) (ess-addr-args addr)))))
+	 (let ((child-w (if VERTICAL (foldl max 0 (map (lambda (arg) (ess-addr-width arg dc)) (ess-addr-args addr))) -1)))
 	  (caddr
 	   (foldl
 	    (lambda (arg data)
 	     (let ((res (ess-addr->ess-utterance
 			 arg
-			 (if VERTICAL (+ (car data) (ess-addr-width addr dc)) (car data))
+			 (if VERTICAL (+ (car data) w) (car data))
 			 (if VERTICAL (cadr data) (+ (cadr data) (ess-addr-height arg dc)))
-			 ;			  (if VERTICAL child-w (ess-addr-width arg dc))
+			 child-w
 			 (+ 1 row)
 			 dc
 			 (- (length (ess-addr-args addr)) 1))))
@@ -345,12 +331,12 @@
 		 (caddr data)
 		 (list res))))))
 	    (list x y '())
-	    (ess-addr-args addr))))))
+	    (ess-addr-args addr)))))))
   (ess-utterance
    addr
    x
    y
-   (max (box-width (ess-man-text (ess-addr-man addr)) dc) (apply + (map ess-utterance-w children)))
+   (if VERTICAL w (max (box-width (ess-man-text (ess-addr-man addr)) dc) (apply + (map ess-utterance-w children))))
    (ess-addr-height addr dc)
    children
    (get-color addr siblings))))
@@ -386,11 +372,10 @@
 
 (define (ess-utterance-paint u x-offset y-offset dc)
  (let* ((text (ess-man-text (ess-addr-man (ess-utterance-addr u))))
-	(args-w (ess-utterance-w Utterance-tree))
-	(x (* WIDTH (/ (+ x-offset (ess-utterance-x u)) args-w)))
-	(y (* WIDTH (/ (+ y-offset (ess-utterance-y u)) args-w)))
-	(w (* WIDTH (/ (ess-utterance-w u) args-w)))
-	(h (* WIDTH (/ (ess-utterance-h u) args-w)))
+	(x (* Zoom-factor (+ x-offset (ess-utterance-x u))))
+	(y (* Zoom-factor (+ y-offset (ess-utterance-y u))))
+	(w (* Zoom-factor (ess-utterance-w u)))
+	(h (* Zoom-factor (ess-utterance-h u)))
 	(args (ess-utterance-args u))
 	(clr (ess-utterance-clr u)))
   (if (invisible x y w h)
@@ -400,18 +385,18 @@
     (send dc set-pen BGCOLOR 1 (if (border?) 'solid 'transparent))
     (send dc draw-rectangle x y w h)
     (send dc set-pen BGCOLOR 0 'transparent)
-    (box-paint
-     text
-     dc
-     (center x w (box-width text dc) 0 WIDTH)
-     (center y h (box-height text dc) 0 HEIGHT)
-     clr)
+    (if (< Zoom-factor 1) '()
+     (box-paint
+      text
+      dc
+      (center x w (box-width text dc) 0 WIDTH)
+      (center y h (box-height text dc) 0 HEIGHT)
+      clr))
     (for-each (lambda (arg) (ess-utterance-paint arg x-offset y-offset dc)) args)))))
 
 (define (box-paint box dc x y color)
  (send dc set-text-foreground (car color))
-; (send dc draw-text box x y))
-)
+ (send dc draw-text box x y))
 
 ;------------------------------------------------------------------------------
 ; Dimensions functions
@@ -548,6 +533,7 @@
 (define Code-gen (generator () (let loop ((x 0)) (yield x) (loop (+ 1 x)))))
 (define Gens '())
 (define Mouse-pos (cons -1 -1))
+(define Zoom-factor 1)
 
 ;------------------------------------------------------------------------------
 ; Preparados, listos, ya
