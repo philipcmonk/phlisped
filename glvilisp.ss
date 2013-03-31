@@ -6,8 +6,6 @@
 (require (only-in racket/gui (yield yield-gui)))
 (require sgl sgl/bitmap)
 
-(provide Thecanvas)
-
 ;------------------------------------------------------------------------------
 ; User-defined constants
 ;------------------------------------------------------------------------------
@@ -125,11 +123,11 @@
      ((cadr r) (- n (length (car r)))))))
   '()))
 (define (invisible x y w h)
- (or
-  (and (< (+ x w) (- Scroll-offset-x)) (not VERTICAL))
-  (and (< (+ y h) (- Scroll-offset-y)) VERTICAL)
-  (> x (- (/ WIDTH Zoom-factor) Scroll-offset-x))
-  (> y (- (/ WIDTH Zoom-factor) Scroll-offset-y))))
+  (or
+   (and (negative? (+ x w)) (not VERTICAL))
+   (and (negative? (+ y h)) VERTICAL)
+   (> x WIDTH)
+   (> y HEIGHT)))
 (define (ess-addr-args addr)
  (force (ess-addr-prom-args addr)))
 (define (ess-utterance-args u)
@@ -156,6 +154,46 @@
  (gl-viewport 0 0 w h)
  #t)
 
+(define (draw-rectangle clr x y w h)
+ (let ((x (/ x 500));(ess-addr-width ARGS (send Thecanvas get-dc))))
+       (y (/ y 50));(ess-addr-width ARGS (send Thecanvas get-dc))))
+       (w (/ w 500));(ess-addr-width ARGS (send Thecanvas get-dc))))
+       (h (/ h 50)));(ess-addr-width ARGS (send Thecanvas get-dc)))))
+  (display x)
+  (display "\t")
+  (display y)
+  (display "\t")
+  (display w)
+  (display "\t")
+  (display h)
+  (display "\n")
+  (gl-clear-color 0.0 0.0 0.0 0.0)
+  (gl-clear 'color-buffer-bit)
+  (gl-color (/ (send clr red) 255) (/ (send clr green) 255) (/ (send clr blue) 255))
+
+  (gl-matrix-mode 'projection)
+  (gl-load-identity)
+  (gl-ortho 0.0 1.0 0.0 1.0 -1.0 1.0)
+  (gl-matrix-mode 'modelview)
+  (gl-load-identity)
+
+  (gl-begin 'quads)
+  (gl-vertex x y)
+  (gl-vertex (+ x w) y)
+  (gl-vertex (+ x w) (+ y h))
+  (gl-vertex x (+ y h))
+  (gl-end)))
+
+(define (draw-text text x y)
+ (let* ((text-target (make-bitmap 200 200))
+	(dc (new bitmap-dc% (bitmap text-target))))
+  (send dc set-font (send the-font-list find-or-create-font 15 "Courier New" 'modern 'normal))
+;  (send dc set-smoothing 'smoothed)
+  (send dc translate x y)
+  (send dc set-scale 1 -1)
+  (send dc draw-text text 0 0)
+  (gl-call-list (bitmap->gl-list text-target))))
+
 (define my-canvas%
  (class* canvas% ()
   (inherit with-gl-context swap-gl-buffers)
@@ -163,16 +201,10 @@
   (define/override (on-paint)
    (with-gl-context
     (lambda ()
-     (gl-clear-color 0.0 0.0 0.0 0.0)
-     (gl-clear 'color-buffer-bit)
-
-     (gl-matrix-mode 'projection)
-     (gl-load-identity)
-     (gl-ortho (- Scroll-offset-x) (+ (- Scroll-offset-x) (/ WIDTH Zoom-factor)) (+ Scroll-offset-y (- (/ HEIGHT Zoom-factor))) Scroll-offset-y -1.0 1.0)
-     (gl-matrix-mode 'modelview)
-     (gl-load-identity)
-
-     (ess-utterance-paint Utterance-tree (send Thecanvas get-dc))
+;     (send dc set-brush BGCOLOR 'solid)
+;     (send dc draw-rectangle 0 0 WIDTH (* 4 HEIGHT))
+      (draw-rectangle (make-object color% 50 100 200) 50 60 70 80)
+     (ess-utterance-paint Utterance-tree Scroll-offset-x Scroll-offset-y (send Thecanvas get-dc))
      (swap-gl-buffers))))
 
   (define/override (on-size width height)
@@ -181,15 +213,20 @@
      (resize width height))))
 
   (define/override (on-event event)
-   (let* ((x (- (/ (send event get-x) Zoom-factor) Scroll-offset-x))
-	  (y (- (/ (send event get-y) Zoom-factor) Scroll-offset-y))
-	  (clicked (find-utterance Utterance-tree x y)))
+   (let* ((x (- (send event get-x) Scroll-offset-x))
+	  (y (- (send event get-y) Scroll-offset-y)) 
+	  (clicked (find-utterance Utterance-tree x y))) 
     (cond
      ((send event dragging?)
       (cond
        ((send event get-left-down)
-	(set! Scroll-offset-x (+ Scroll-offset-x (/ (+ (- (car Mouse-pos)) (send event get-x)) Zoom-factor)))
-	(set! Scroll-offset-y (+ Scroll-offset-y (/ (+ (- (cdr Mouse-pos)) (send event get-y)) Zoom-factor)))
+	(set! Scroll-offset-x (+ Scroll-offset-x (* 1 (+ (- (car Mouse-pos)) (send event get-x)))))
+	(set! Scroll-offset-y (+ Scroll-offset-y (- (cdr Mouse-pos)) (send event get-y)))
+	(set! Mouse-pos (cons (send event get-x) (send event get-y)))
+	(send this on-paint))
+       ((send event get-right-down)
+	(set! Scroll-offset-x (+ Scroll-offset-x (- (car Mouse-pos)) (send event get-x)))
+	(set! Scroll-offset-y (+ Scroll-offset-y (- (cdr Mouse-pos)) (send event get-y)))
 	(set! Mouse-pos (cons (send event get-x) (send event get-y)))
 	(send this on-paint))))
      ((eq? (send event get-event-type) 'left-down)
@@ -228,11 +265,6 @@
      (open-u Selection #t))
     ((eq? (send event get-key-code) #\C)
      (close-u Selection #t))
-    ((eq? (send event get-key-code) #\z)
-     (set! Scroll-offset-y (- (ess-utterance-y Selection)))
-     (set! Scroll-offset-x (- (ess-utterance-x Selection)))
-     (set! Zoom-factor (if (= Zoom-factor 1) (if VERTICAL (/ HEIGHT (ess-utterance-h Selection)) (/ WIDTH (ess-utterance-w Selection ))) 1))
-     (send this on-paint))
     ((eq? (send event get-key-code) 'wheel-up)
      (if VERTICAL
       (set! Scroll-offset-y (+ SCROLLDIST Scroll-offset-y))
@@ -261,7 +293,7 @@
 
 (define (generate-utterance-tree addr)
     (set! Rows '())
-    (set! Utterance-tree (ess-addr->ess-utterance addr 0 0 (if VERTICAL (ess-addr-width ARGS (send Thecanvas get-dc)) -1) 0 (send Thecanvas get-dc) 1))
+    (set! Utterance-tree (ess-addr->ess-utterance addr 0 0 (ess-addr-width ARGS (send Thecanvas get-dc)) 0 (send Thecanvas get-dc) 1))
     (set! Selection (find-utterance-from-addr Utterance-tree (ess-utterance-addr Selection))))
 
 ;------------------------------------------------------------------------------
@@ -291,6 +323,15 @@
    (ess-expr-name expr)
    (if (eq? (ess-expr-type expr) 'define) (string-append ":  " (ess-expr-name (cadr (ess-expr-args expr)))) ""))
   (let ((new-context
+;	 (foldl
+;	  (lambda (arg n con)
+;	   (if (eq? (ess-expr-type arg) 'define)
+;	    (let ((id (cadr (ess-expr-args arg))))
+;	     (hash-set con (string->symbol (ess-expr-name id)) (append laddr (list n))))
+;	    con))
+;	  context
+;	  (ess-expr-args expr)
+;	  (build-list (length (ess-expr-args expr)) values))))
 	 (apply hash-set* context
 	  (apply append
 	   (map
@@ -331,39 +372,38 @@
      (build-list (length (ess-man-args man)) values))))))
 
 (define (ess-addr->ess-utterance addr x y w row dc siblings)
- (let ((children 
-	(if (closed? addr)
-	 '()
-	 (let ((child-w (if VERTICAL (foldl max 0 (map (lambda (arg) (ess-addr-width arg dc)) (ess-addr-args addr))) -1)))
-	  (caddr
-	   (foldl
-	    (lambda (arg data)
-	     (let ((res (ess-addr->ess-utterance
-			 arg
-			 (if VERTICAL (+ (car data) w) (car data))
-			 (if VERTICAL (cadr data) (+ (cadr data) (ess-addr-height arg dc)))
-			 child-w
-			 (+ 1 row)
-			 dc
-			 (- (length (ess-addr-args addr)) 1))))
-	      (list
-	       (if VERTICAL (car data) (+ (car data) (ess-utterance-w res)))
-	       (if VERTICAL (+ (cadr data) (ess-addr-height arg dc)) (cadr data))
-	       (if (null? res)
-		(caddr data)
-		(append
-		 (caddr data)
-		 (list res))))))
-	    (list x y '())
-	    (ess-addr-args addr)))))))
-  (ess-utterance
-   addr
-   x
-   y
-   (if VERTICAL w (max (box-width (ess-man-text (ess-addr-man addr)) dc) (apply + (map ess-utterance-w children))))
-   (ess-addr-height addr dc)
-   children
-   (get-color addr siblings))))
+ (ess-utterance
+  addr
+  x
+  y
+  w
+  (ess-addr-height addr dc)
+  (delay 
+   (if (closed? addr)
+    '()
+    (let ((child-w (foldl max 0 (map (lambda (arg) (ess-addr-width arg dc)) (ess-addr-args addr)))))
+     (caddr
+      (foldl
+       (lambda (arg data)
+	(list
+	 (if VERTICAL (car data) (+ (car data) (ess-addr-width arg dc)))
+	 (if VERTICAL (+ (cadr data) (ess-addr-height arg dc)) (cadr data))
+	 (let ((res (ess-addr->ess-utterance
+		     arg
+		     (if VERTICAL (+ (car data) w) (car data))
+		     (if VERTICAL (cadr data) (+ (cadr data) (ess-addr-height arg dc)))
+		     (if VERTICAL child-w (ess-addr-width arg dc))
+		     (+ 1 row)
+		     dc
+		     (- (length (ess-addr-args addr)) 1))))
+	  (if (null? res)
+	   (caddr data)
+	   (append
+	    (caddr data)
+	    (list res))))))
+       (list x y '())
+       (ess-addr-args addr))))))
+  (get-color addr siblings)))
 
 ;------------------------------------------------------------------------------
 ; Find functions
@@ -394,51 +434,33 @@
 ; Paint functions
 ;------------------------------------------------------------------------------
 
-(define (ess-utterance-paint u dc)
+(define (ess-utterance-paint u x-offset y-offset dc)
  (let* ((text (ess-man-text (ess-addr-man (ess-utterance-addr u))))
-	(x (ess-utterance-x u))
-	(y (ess-utterance-y u))
-	(w (ess-utterance-w u))
-	(h (ess-utterance-h u))
+	(args-w (ess-addr-width ARGS dc))
+	(x (* WIDTH (/ (+ x-offset (ess-utterance-x u)) args-w)))
+	(y (* WIDTH (/ (+ y-offset (ess-utterance-y u)) args-w)))
+	(w (* WIDTH (/ (ess-utterance-w u) args-w)))
+	(h (* WIDTH (/ (ess-utterance-h u) args-w)))
 	(args (ess-utterance-args u))
 	(clr (ess-utterance-clr u)))
-  (if (invisible x y w h)
-   '()
+;  (if (invisible x y w h)
+;   '()
    (begin
+;    (send dc set-brush (cdr clr) 'solid)
+;    (send dc set-pen BGCOLOR 1 (if (border?) 'solid 'transparent))
     (draw-rectangle (cdr clr) x y w h)
-    (if (< Zoom-factor 1) '()
-     (box-paint
-      text
-      dc
-      (center x w (box-width text dc) 0 WIDTH)
-      (center y h (box-height text dc) 0 HEIGHT)
-      clr))
-    (for-each (lambda (arg) (ess-utterance-paint arg dc)) args)))))
+;    (send dc set-pen BGCOLOR 0 'transparent)
+    (box-paint
+     text
+     (center x w (box-width text dc) 0 WIDTH)
+     (center y h (box-height text dc) 0 HEIGHT)
+     clr)
+    (for-each (lambda (arg) (ess-utterance-paint arg x-offset y-offset dc)) args))))
 
-(define (box-paint box dc x y color)
+(define (box-paint box x y color) '()
 ; (send dc set-text-foreground (car color))
 ; (send dc draw-text box x y))
-'() )
-
-(define (draw-rectangle clr x y w h)
- (gl-color (/ (send clr red) 255) (/ (send clr green) 255) (/ (send clr blue) 255))
-
- (gl-begin 'quads)
- (gl-vertex x (- y))
- (gl-vertex (+ x w) (- y))
- (gl-vertex (+ x w) (- (+ y h)))
- (gl-vertex x (- (+ y h)))
- (gl-end))
-
-(define (draw-text text x y)
- (let* ((text-target (make-bitmap 200 200))
-	(dc (new bitmap-dc% (bitmap text-target))))
-  (send dc set-font (send the-font-list find-or-create-font 15 "Courier New" 'modern 'normal))
-;  (send dc set-smoothing 'smoothed)
-  (send dc translate x y)
-  (send dc set-scale 1 -1)
-  (send dc draw-text text 0 0)
-  (gl-call-list (bitmap->gl-list text-target))))
+)
 
 ;------------------------------------------------------------------------------
 ; Dimensions functions
@@ -531,16 +553,16 @@
   (if
    (or
     (and (negative? (+ x w)) (not VERTICAL))
-    (> x (/ WIDTH Zoom-factor)))
+    (> x WIDTH))
    (let ((c (+ (ess-utterance-x u) (/ w 2))))
-    (set! Scroll-offset-x (- (+ c (- (/ WIDTH Zoom-factor 2))))))
+    (set! Scroll-offset-x (- (+ c (- (/ WIDTH 2))))))
    '())
   (if
    (or
     (and (negative? (+ y h)) VERTICAL)
-    (> y (/ HEIGHT Zoom-factor)))
+    (> y HEIGHT))
    (let ((c (+ (ess-utterance-y u) (/ h 2))))
-    (set! Scroll-offset-y (- (+ c (- (/ HEIGHT Zoom-factor 2))))))
+    (set! Scroll-offset-y (- (+ c (- (/ HEIGHT 2))))))
    '())))
 
 
@@ -575,7 +597,6 @@
 (define Code-gen (generator () (let loop ((x 0)) (yield x) (loop (+ 1 x)))))
 (define Gens '())
 (define Mouse-pos (cons -1 -1))
-(define Zoom-factor 1)
 
 ;------------------------------------------------------------------------------
 ; Preparados, listos, ya
