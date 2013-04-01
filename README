@@ -18,7 +18,9 @@ c	Selection follows the ess-expr in all cases except "close"
 
 Replace Zoom-factor with reciprocal
 
-Display text
+Make prettier/faster text
+
+Try changing perspective without clearing
 
 Make zoom-out emphasize function names and use minor dimension space more efficiently
 

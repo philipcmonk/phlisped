@@ -14,6 +14,11 @@
 
 (define _FTGLfont (_cpointer 'FTGLfont))
 (define-ftgl ftglCreatePixmapFont (_fun _path -> _FTGLfont))
+(define-ftgl ftglCreateBitmapFont (_fun _path -> _FTGLfont))
+(define-ftgl ftglCreateBufferFont (_fun _path -> _FTGLfont))
+(define-ftgl ftglCreateTextureFont (_fun _path -> _FTGLfont))
+(define-ftgl ftglCreateOutlineFont (_fun _path -> _FTGLfont))
+(define-ftgl ftglCreatePolygonFont (_fun _path -> _FTGLfont))
 (define-ftgl ftglSetFontFaceSize (_fun _FTGLfont _int _int -> _void))
 (define-ftgl ftglGetFontLineHeight (_fun _FTGLfont -> _float))
 (define-ftgl ftglGetFontAdvance (_fun _FTGLfont _string -> _float))
@@ -163,7 +168,7 @@
 (struct ess-expr (name args type)) 
 (struct ess-man (expr text args role context))
 (struct ess-addr (man laddr prom-args))
-(struct ess-utterance (addr x y w h prom-args clr)) 
+(struct ess-utterance (addr x y w h text-w text-h prom-args clr)) 
 
 (define (resize w h)
  (gl-viewport 0 0 w h)
@@ -375,6 +380,8 @@
    y
    (if VERTICAL w (max (box-width (ess-man-text (ess-addr-man addr))) (apply + (map ess-utterance-w children))))
    (ess-addr-height addr dc)
+   (box-width (ess-man-text (ess-addr-man addr)))
+   (box-height (ess-man-text (ess-addr-man addr)))
    children
    (get-color addr siblings))))
 
@@ -413,6 +420,8 @@
 	(y (ess-utterance-y u))
 	(w (ess-utterance-w u))
 	(h (ess-utterance-h u))
+	(text-w (ess-utterance-text-w u))
+	(text-h (ess-utterance-text-h u))
 	(args (ess-utterance-args u))
 	(clr (ess-utterance-clr u)))
   (if (invisible x y w h)
@@ -422,8 +431,8 @@
     (if (< Zoom-factor 1) '()
      (draw-text
       text
-      (* Zoom-factor (center x w (box-width text) (- Scroll-offset-x) WIDTH))
-      (* Zoom-factor (let ((box-h (box-height text))) (+ box-h -3 (center y h box-h 0 HEIGHT))))
+      (* Zoom-factor (center x w text-w (- Scroll-offset-x) WIDTH))
+      (* Zoom-factor (+ text-h -3 (center y h text-h 0 HEIGHT)))
       (car clr)))
     (for-each (lambda (arg) (ess-utterance-paint arg dc)) args)))))
 
@@ -449,11 +458,9 @@
 
 (define (box-width box)
  (ftglGetFontAdvance Font box))
-; (let-values (((tw th a b) (send dc get-text-extent box))) tw))
 
 (define (box-height box)
  (ftglGetFontLineHeight Font))
-; (let-values (((tw th a b) (send dc get-text-extent box))) th))
 
 (define (box-maj-dim box)
  (if VERTICAL (box-height box) (box-width box)))
@@ -574,20 +581,20 @@
 (define Utterance-tree #f)
 (define Root ARGS)
 (define Open (set))
-(define Selection (ess-utterance ARGS 0 0 0 0 '() #f))
+(define Selection (ess-utterance ARGS 0 0 0 0 0 0 '() #f))
 (define Scroll-offset-x 0)
 (define Scroll-offset-y 0)
 (define Code-gen (generator () (let loop ((x 0)) (yield x) (loop (+ 1 x)))))
 (define Gens '())
 (define Mouse-pos (cons -1 -1))
 (define Zoom-factor 1)
-(define Font (ftglCreatePixmapFont "/home/philip/vilisp/VeraMono.ttf"))
+(define Font (ftglCreateBitmapFont "/home/philip/vilisp/VeraMono.ttf"))
 
 ;------------------------------------------------------------------------------
 ; Preparados, listos, ya
 ;------------------------------------------------------------------------------
 
-(ftglSetFontFaceSize Font 24 24)
+(ftglSetFontFaceSize Font 24 72)
 (generate-utterance-tree ARGS)
 (send win show #t)
 
