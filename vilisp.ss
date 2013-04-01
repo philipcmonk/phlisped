@@ -2,11 +2,24 @@
 
 (require racket/draw)
 (require racket/generator)
-(require (except-in racket/gui yield))
-(require (only-in racket/gui (yield yield-gui)))
-(require sgl sgl/bitmap)
+(require ffi/unsafe ffi/unsafe/define ffi/unsafe/cvector)
+(require (except-in racket/gui yield ->))
+(require (only-in racket/gui (yield yield-gui) (-> ->-gui)))
+(require sgl sgl/bitmap sgl/gl)
 
 (provide Thecanvas)
+
+
+(define-ffi-definer define-ftgl (ffi-lib "libftgl"))
+
+(define _FTGLfont (_cpointer 'FTGLfont))
+(define-ftgl ftglCreatePixmapFont (_fun _path -> _FTGLfont))
+(define-ftgl ftglSetFontFaceSize (_fun _FTGLfont _int _int -> _void))
+(define-ftgl ftglGetFontLineHeight (_fun _FTGLfont -> _float))
+(define-ftgl ftglGetFontAdvance (_fun _FTGLfont _string -> _float))
+(define-ftgl ftglRenderFont (_fun _FTGLfont _string _int -> _void))
+(define-ftgl ftglDestroyFont (_fun _FTGLfont -> _void))
+
 
 ;------------------------------------------------------------------------------
 ; User-defined constants
@@ -17,16 +30,16 @@
 (define WIDTH (* 1 1600))
 (define HEIGHT 899)
 (define COLORSCHEME 'alternate)
-(define COLOR1 (cons "white" (make-object color% 0 0 127)))
-(define COLOR2 (cons "white" (make-object color% 63 0 127)))
-(define COLOR3 (cons "white" (make-object color% 0 63 127)))
-(define COLOR4 (cons "white" (make-object color% 63 63 127)))
-(define COLOR5 (cons "white" (make-object color% 0 0 159)))
-(define COLOR6 (cons "white" (make-object color% 0 0 159)))
-(define CODECOLOR1 (cons "white" (make-object color% 255 0 0)))
-(define CODECOLOR2 (cons "white" (make-object color% 223 0 0)))
-(define CODECOLOR3 (cons "white" (make-object color% 191 0 0)))
-(define SELCOLOR (cons "magenta" (make-object color% 0 191 0)))
+(define COLOR1 (cons '(255 255 255) '(0 0 127)))
+(define COLOR2 (cons '(255 255 255) '(63 0 127)))
+(define COLOR3 (cons '(255 255 255) '(0 63 127)))
+(define COLOR4 (cons '(255 255 255) '(63 63 127)))
+(define COLOR5 (cons '(255 255 255) '(0 0 159)))
+(define COLOR6 (cons '(255 255 255) '(0 0 159)))
+(define CODECOLOR1 (cons '(255 255 255) '(255 0 0)))
+(define CODECOLOR2 (cons '(255 255 255) '(223 0 0)))
+(define CODECOLOR3 (cons '(255 255 255) '(191 0 0)))
+(define SELCOLOR (cons '(128 0 128) '(0 191 0)))
 (define BGCOLOR "black")
 (define INITIALCOLOR '(0 0 127))
 (define COLORRANGES '(127 0 -127))
@@ -84,12 +97,12 @@
      (if (odd? row)
       (if (zero? col) COLOR5 (if (odd? col) COLOR1 COLOR2))
       (if (zero? col) COLOR6 (if (odd? col) COLOR3 COLOR4))))))))
-(define (center offset lenwhole lenpiece start end)
- (let ((naive (+ (max offset start) (/ (min lenwhole (+ lenwhole offset) end (- end offset)) 2) (- (/ lenpiece 2))))
+(define (center offset lenwhole lenpiece start width)
+ (let ((naive (+ (max offset start) (/ (min lenwhole (+ lenwhole offset) width (- (+ start width) offset)) 2) (- (/ lenpiece 2))))
        (start-bound (- (+ offset lenwhole) lenpiece)))
   (cond
    ((> naive start-bound) start-bound)
-   ((> (+ naive lenpiece) end) offset)
+   ((> (+ naive lenpiece) (+ start width)) offset)
    (#t naive))))
 (define (ess-expr-descendants expr)
  (cons expr (map ess-expr-descendants (ess-expr-args expr))))
@@ -360,7 +373,7 @@
    addr
    x
    y
-   (if VERTICAL w (max (box-width (ess-man-text (ess-addr-man addr)) dc) (apply + (map ess-utterance-w children))))
+   (if VERTICAL w (max (box-width (ess-man-text (ess-addr-man addr))) (apply + (map ess-utterance-w children))))
    (ess-addr-height addr dc)
    children
    (get-color addr siblings))))
@@ -407,21 +420,15 @@
    (begin
     (draw-rectangle (cdr clr) x y w h)
     (if (< Zoom-factor 1) '()
-     (box-paint
+     (draw-text
       text
-      dc
-      (center x w (box-width text dc) 0 WIDTH)
-      (center y h (box-height text dc) 0 HEIGHT)
-      clr))
+      (* Zoom-factor (center x w (box-width text) (- Scroll-offset-x) WIDTH))
+      (* Zoom-factor (let ((box-h (box-height text))) (+ box-h -3 (center y h box-h 0 HEIGHT))))
+      (car clr)))
     (for-each (lambda (arg) (ess-utterance-paint arg dc)) args)))))
 
-(define (box-paint box dc x y color)
-; (send dc set-text-foreground (car color))
-; (send dc draw-text box x y))
-'() )
-
 (define (draw-rectangle clr x y w h)
- (gl-color (/ (send clr red) 255) (/ (send clr green) 255) (/ (send clr blue) 255))
+ (gl-color (/ (car clr) 255) (/ (cadr clr) 255) (/ (caddr clr) 255))
 
  (gl-begin 'quads)
  (gl-vertex x (- y))
@@ -430,40 +437,38 @@
  (gl-vertex x (- (+ y h)))
  (gl-end))
 
-(define (draw-text text x y)
- (let* ((text-target (make-bitmap 200 200))
-	(dc (new bitmap-dc% (bitmap text-target))))
-  (send dc set-font (send the-font-list find-or-create-font 15 "Courier New" 'modern 'normal))
-;  (send dc set-smoothing 'smoothed)
-  (send dc translate x y)
-  (send dc set-scale 1 -1)
-  (send dc draw-text text 0 0)
-  (gl-call-list (bitmap->gl-list text-target))))
+(define (draw-text text x y clr)
+ (gl-color (/ (car clr) 255) (/ (cadr clr) 255) (/ (caddr clr) 255))
+ (gl-raster-pos (- 1 Scroll-offset-x) (- Scroll-offset-y 1))
+ (glBitmap 0 0 0 0 (+ x Scroll-offset-x) (- (+ y Scroll-offset-y)) (make-cvector _byte 1))
+ (ftglRenderFont Font text 65535))
 
 ;------------------------------------------------------------------------------
 ; Dimensions functions
 ;------------------------------------------------------------------------------
 
-(define (box-width box dc)
- (let-values (((tw th a b) (send dc get-text-extent box))) tw))
+(define (box-width box)
+ (ftglGetFontAdvance Font box))
+; (let-values (((tw th a b) (send dc get-text-extent box))) tw))
 
-(define (box-height box dc)
- (let-values (((tw th a b) (send dc get-text-extent box))) th))
+(define (box-height box)
+ (ftglGetFontLineHeight Font))
+; (let-values (((tw th a b) (send dc get-text-extent box))) th))
 
-(define (box-maj-dim box dc)
- (if VERTICAL (box-height box dc) (box-width box dc)))
+(define (box-maj-dim box)
+ (if VERTICAL (box-height box) (box-width box)))
 
 (define (ess-addr-width addr dc)
- (if VERTICAL (box-width (ess-man-text (ess-addr-man addr)) dc) (ess-addr-maj-dim addr dc)))
+ (if VERTICAL (box-width (ess-man-text (ess-addr-man addr))) (ess-addr-maj-dim addr dc)))
 
 (define (ess-addr-height addr dc)
  (if VERTICAL (ess-addr-maj-dim addr dc) CELLHEIGHT))
 
 (define (ess-addr-maj-dim addr dc)
  (if (closed? addr)
-  (box-maj-dim (ess-man-text (ess-addr-man addr)) dc)
+  (box-maj-dim (ess-man-text (ess-addr-man addr)))
   (max
-   (box-maj-dim (ess-man-text (ess-addr-man addr)) dc)
+   (box-maj-dim (ess-man-text (ess-addr-man addr)))
    (foldl
     +
     0
@@ -576,11 +581,13 @@
 (define Gens '())
 (define Mouse-pos (cons -1 -1))
 (define Zoom-factor 1)
+(define Font (ftglCreatePixmapFont "/home/philip/vilisp/VeraMono.ttf"))
 
 ;------------------------------------------------------------------------------
 ; Preparados, listos, ya
 ;------------------------------------------------------------------------------
 
+(ftglSetFontFaceSize Font 24 24)
 (generate-utterance-tree ARGS)
 (send win show #t)
 
