@@ -1,5 +1,15 @@
-#lang racket
+#lang scribble/lp
 
+@chunk[<*>
+<require-libraries>
+<define-constants>
+<define-functions>
+<global-variables>
+<call-functions>]
+
+@section{Require libraries}
+
+@chunk[<require-libraries>
 (require racket/draw)
 (require racket/generator)
 (require ffi/unsafe ffi/unsafe/define ffi/unsafe/cvector)
@@ -24,12 +34,11 @@
 (define-ftgl ftglGetFontAdvance (_fun _FTGLfont _string -> _float))
 (define-ftgl ftglRenderFont (_fun _FTGLfont _string _int -> _void))
 (define-ftgl ftglDestroyFont (_fun _FTGLfont -> _void))
+]
 
+@section{User-defined constants}
 
-;------------------------------------------------------------------------------
-; User-defined constants
-;------------------------------------------------------------------------------
-
+@chunk[<define-constants>
 (define VERTICAL #f)
 (define STARTOPEN #f)
 (define WIDTH (* 1 1600))
@@ -53,14 +62,6 @@
 (define CELLHEIGHT 35)
 (define SCROLLDIST 100)
 (define FILENAME "vilisp.ss")
-;(define FILENAME "/home/philip/semanticweb/lisp/graph.ss")
-
-;(define COLOR1 "darkblue")
-;(define COLOR2 "yellow")
-;(define COLOR3 "red")
-;(define COLOR4 "cyan")
-;(define SELCOLORb "darkgreen")
-;(define SELCOLORf "magenta")
 
 (define (concat s n)
  (string->symbol (string-append s (number->string n))))
@@ -79,11 +80,58 @@
 	  ormap ((() proc) ,(curry concat "list")))))
 
 (define Roles ROLES)
+]
 
-;------------------------------------------------------------------------------
-; Utility functions
-;------------------------------------------------------------------------------
+@section{Global variables}
 
+Global variables and programmatically-defined constants
+
+@chunk[<global-variables>
+(define ARGS
+ (ess-man->ess-addr
+  (ess-expr->ess-man
+   (list->ess-expr
+    (call-with-input-file FILENAME
+     (lambda (f)
+      (read-language f)
+      (define (in rem)
+       (let ((x (read rem)))
+	(if (eof-object? x)
+	 '(end)
+	 (cons x (in rem)))))
+      (in f))))
+   'root
+   '()
+   (hash))
+  (list)))
+(define Rows '())
+(define Utterance-tree #f)
+(define Root ARGS)
+(define Open (set))
+(define Selection (ess-utterance ARGS 0 0 0 0 0 0 '() #f))
+(define Scroll-offset-x 0)
+(define Scroll-offset-y 0)
+(define Code-gen (generator () (let loop ((x 0)) (yield x) (loop (+ 1 x)))))
+(define Gens '())
+(define Mouse-pos (cons -1 -1))
+(define Zoom-factor 1)
+(define Font (ftglCreateBitmapFont "/home/philip/vilisp/VeraMono.ttf"))
+]
+
+@section{Define functions}
+
+@chunk[<define-functions>
+<utility-functions>
+<struct/class-declarations>
+<conversion-functions>
+<find-functions>
+<paint-functions>
+<dimensions-functions>
+<selection-functions>]
+
+@subsection{Utility functions}
+
+@chunk[<utility-functions>
 (define (border?) (eq? COLORSCHEME 'gradient))
 (define (get-color addr siblings)
  (if (eq? addr (ess-utterance-addr Selection))
@@ -160,11 +208,11 @@
  (set-member? Open addr))
 (define (closed? addr)
  (not (open? addr)))
+]
 
-;------------------------------------------------------------------------------
-; Struct/class declarations
-;------------------------------------------------------------------------------
+@subsection{Struct/class declarations}
 
+@chunk[<struct/class-declarations>
 (struct ess-expr (name args type)) 
 (struct ess-man (expr text args role context))
 (struct ess-addr (man laddr prom-args))
@@ -281,11 +329,11 @@
     (set! Rows '())
     (set! Utterance-tree (ess-addr->ess-utterance addr 0 0 (if VERTICAL (ess-addr-width ARGS (send Thecanvas get-dc)) -1) 0 (send Thecanvas get-dc) 1))
     (set! Selection (find-utterance-from-addr Utterance-tree (ess-utterance-addr Selection))))
+]
 
-;------------------------------------------------------------------------------
-; Conversion functions
-;------------------------------------------------------------------------------
+@subsection{Conversion functions}
 
+@chunk[<conversion-functions>
 (define (list->ess-expr l)
  (apply
   ess-expr
@@ -383,12 +431,12 @@
    (box-width (ess-man-text (ess-addr-man addr)))
    (box-height (ess-man-text (ess-addr-man addr)))
    children
-   (get-color addr siblings))))
+   (get-color addr siblings)))) 
+]
 
-;------------------------------------------------------------------------------
-; Find functions
-;------------------------------------------------------------------------------
+@subsection{Find functions}
 
+@chunk[<find-functions>
 (define (find-utterance root x y)
  (if (or
       (< (min-dim x y) (+ (ess-utterance-min-dim root) (ess-utterance-min-dim-span root)))
@@ -409,11 +457,11 @@
   (ormap
    (lambda (child) (find-utterance-from-addr child addr))
    (ess-utterance-args tree))))
+]
 
-;------------------------------------------------------------------------------
-; Paint functions
-;------------------------------------------------------------------------------
+@subsection{Paint functions}
 
+@chunk[<paint-functions>
 (define (ess-utterance-paint u dc)
  (let* ((text (ess-man-text (ess-addr-man (ess-utterance-addr u))))
 	(x (ess-utterance-x u))
@@ -451,11 +499,11 @@
  (gl-raster-pos (- 1 Scroll-offset-x) (- Scroll-offset-y 1))
  (glBitmap 0 0 0 0 (+ x Scroll-offset-x) (- (+ y Scroll-offset-y)) (make-cvector _byte 1))
  (ftglRenderFont Font text 65535))
+]
 
-;------------------------------------------------------------------------------
-; Dimensions functions
-;------------------------------------------------------------------------------
+@subsection{Dimensions functions}
 
+@chunk[<dimensions-functions>
 (define (box-width box)
  (ftglGetFontAdvance Font box))
 
@@ -480,11 +528,11 @@
     +
     0
     (map (lambda (arg) (ess-addr-maj-dim arg dc)) (ess-addr-args addr))))))
+]
 
-;------------------------------------------------------------------------------
-; Selection functions
-;------------------------------------------------------------------------------
+@subsection{Selection functions}
 
+@chunk[<selection-functions>
 (define (go dir)
  (let ((new-sel (apply find-utterance Utterance-tree
 		 (cond
@@ -554,47 +602,12 @@
    (let ((c (+ (ess-utterance-y u) (/ h 2))))
     (set! Scroll-offset-y (- (+ c (- (/ HEIGHT Zoom-factor 2))))))
    '())))
+]
 
+@section{Preparados, listos, ya}
 
-;------------------------------------------------------------------------------
-; Global variables and programmatically-defined constants
-;------------------------------------------------------------------------------
-
-(define ARGS
- (ess-man->ess-addr
-  (ess-expr->ess-man
-   (list->ess-expr
-    (call-with-input-file FILENAME
-     (lambda (f)
-      (read-language f)
-      (define (in rem)
-       (let ((x (read rem)))
-	(if (eof-object? x)
-	 '(end)
-	 (cons x (in rem)))))
-      (in f))))
-   'root
-   '()
-   (hash))
-  (list)))
-(define Rows '())
-(define Utterance-tree #f)
-(define Root ARGS)
-(define Open (set))
-(define Selection (ess-utterance ARGS 0 0 0 0 0 0 '() #f))
-(define Scroll-offset-x 0)
-(define Scroll-offset-y 0)
-(define Code-gen (generator () (let loop ((x 0)) (yield x) (loop (+ 1 x)))))
-(define Gens '())
-(define Mouse-pos (cons -1 -1))
-(define Zoom-factor 1)
-(define Font (ftglCreateBitmapFont "/home/philip/vilisp/VeraMono.ttf"))
-
-;------------------------------------------------------------------------------
-; Preparados, listos, ya
-;------------------------------------------------------------------------------
-
+@chunk[<call-functions>
 (ftglSetFontFaceSize Font 24 72)
 (generate-utterance-tree ARGS)
 (send win show #t)
-
+]
