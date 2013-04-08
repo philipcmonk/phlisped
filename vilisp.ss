@@ -10,15 +10,13 @@
 @section{Require libraries}
 
 @chunk[<require-libraries>
-(require racket/draw)
-(require racket/generator)
-(require ffi/unsafe ffi/unsafe/define ffi/unsafe/cvector)
 (require (except-in racket/gui yield ->))
 (require (only-in racket/gui (yield yield-gui) (-> ->-gui)))
-(require sgl sgl/bitmap sgl/gl)
+(require sgl sgl/gl)
 
 (provide Thecanvas)
 
+(require ffi/unsafe ffi/unsafe/define ffi/unsafe/cvector)
 
 (define-ffi-definer define-ftgl (ffi-lib "libftgl"))
 
@@ -36,13 +34,25 @@
 (define-ftgl ftglDestroyFont (_fun _FTGLfont -> _void))
 ]
 
+We import the racket/gui library for creating the window and managing the input.  We use openGL to draw everything to the screen.  We also import the ftgl c library for rendering text into openGL.  Currently, we use the bitmap font method.
+
 @section{User-defined constants}
 
 @chunk[<define-constants>
-(define VERTICAL #f)
-(define STARTOPEN #f)
+<def-vertical> <def-width/height> <def-colors> <def-cellheight> <def-scrolldist> <def-filename> <def-roles>]
+
+@chunk[<def-vertical>
+(define VERTICAL #f)]
+
+If true, then the major dimension is vertical.  Thus, the tree opens left-to-right instead of top-to-bottom.  This is not actually a constant (it can be changed by pressing the "f" key).
+
+@chunk[<def-width/height>
 (define WIDTH (* 1 1600))
-(define HEIGHT 899)
+(define HEIGHT 899)]
+
+Defines the default width and height of the window.
+
+@chunk[<def-colors>
 (define COLORSCHEME 'alternate)
 (define COLOR1 (cons '(255 255 255) '(0 0 127)))
 (define COLOR2 (cons '(255 255 255) '(63 0 127)))
@@ -57,12 +67,50 @@
 (define BGCOLOR "black")
 (define INITIALCOLOR '(0 0 127))
 (define COLORRANGES '(127 0 -127))
-(define FGCOLOR '(255 255 255))
-(define CELLWIDTH 150)
-(define CELLHEIGHT 35)
-(define SCROLLDIST 100)
-(define FILENAME "vilisp.ss")
+(define FGCOLOR '(255 255 255))]
 
+All colors are defined as a pair where the first element is the foreground color and the second element is the background color.
+
+@racket[COLORSCHEME] may be @racket['alternate] or @racket['gradient], and can be changed by pressing "F".  The gradient color scheme causes each set of siblings to be colored on a gradient starting from @racket[INITIALCOLOR] and changing by the end by the delta in @racket[COLORRANGES].  The gradient color scheme is currently inoperative.
+
+For the alternate color scheme, we have the following logic to determine the color of a cell:
+
+@itemize[
+@item{If in odd-numbered row, then
+@itemize[
+	@item{if eldest child, then @racket[COLOR5],}
+	@item{if odd-numbered child, then @racket[COLOR1],}
+	@item{if even-numbered child, then @racket[COLOR2].}]}
+
+@item{if in even-numbered row, then
+@itemize[
+	@item{if eldest child, then @racket[COLOR6],}
+	@item{if odd-numbered child, then @racket[COLOR3],}
+	@item{if even-numbered child, then @racket[COLOR4].}]}
+]
+
+@racket[SELCOLOR] is the color used for coloring the selected cell in either mode.
+
+@racket[BGCOLOR] is the background color (i.e. the color of everything not part of the tree) in either mode.
+
+I honestly have no idea what @racket[FGCOLOR] is supposed to do, but it seems to be related to the gradient mode.
+
+@chunk[<def-cellheight>
+(define CELLHEIGHT 35)]
+
+The height of a cell (in absolute coordinates) in horizontal mode.  We don't just take the height of text becaues we may want to add some padding.
+
+@chunk[<def-scrolldist>
+(define SCROLLDIST 100)]
+
+The distance traversed by a single mouse wheel movement event.  Currently, this is in absolute coordinates, but that may change.
+
+@chunk[<def-filename>
+(define FILENAME "vilisp.ss")]
+
+The file to be parsed.
+
+@chunk[<def-roles>
 (define (concat s n)
  (string->symbol (string-append s (number->string n))))
 (define ROLES
@@ -79,8 +127,9 @@
 	  andmap ((() proc) ,(curry concat "list"))
 	  ormap ((() proc) ,(curry concat "list")))))
 
-(define Roles ROLES)
-]
+(define Roles ROLES)]
+
+A hash whereby a keyword is associated with a list of length two.  In this list, the first element is a list of "hint" names for the children of this function.  The second element is a function which takes the child number and is called to generate names for children after those named in the first element.
 
 @section{Global variables}
 
@@ -93,7 +142,9 @@ Global variables and programmatically-defined constants
    (list->ess-expr
     (call-with-input-file FILENAME
      (lambda (f)
-      (read-language f)
+      (read-accept-reader #t)
+;      (read f)
+;      (read-language f)
       (define (in rem)
        (let ((x (read rem)))
 	(if (eof-object? x)
@@ -111,7 +162,6 @@ Global variables and programmatically-defined constants
 (define Selection (ess-utterance ARGS 0 0 0 0 0 0 '() #f))
 (define Scroll-offset-x 0)
 (define Scroll-offset-y 0)
-(define Code-gen (generator () (let loop ((x 0)) (yield x) (loop (+ 1 x)))))
 (define Gens '())
 (define Mouse-pos (cons -1 -1))
 (define Zoom-factor 1)
