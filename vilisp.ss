@@ -44,7 +44,7 @@ We import the racket/gui library for creating the window and managing the input.
 @chunk[<def-vertical>
 (define VERTICAL #f)]
 
-If true, then the major dimension is vertical.  Thus, the tree opens left-to-right instead of top-to-bottom.  This is not actually a constant (it can be changed by pressing the "f" key).
+If true, then the major dimension is vertical.  Thus, the tree opens left-to-right instead of top-to-bottom.  This is not actually a constant (it can be changed by pressing the ``f'' key).
 
 @chunk[<def-width/height>
 (define WIDTH (* 1 1600))
@@ -71,11 +71,17 @@ Defines the default width and height of the window.
 
 All colors are defined as a pair where the first element is the foreground color and the second element is the background color.
 
-@racket[COLORSCHEME] may be @racket['alternate] or @racket['gradient], and can be changed by pressing "F".  The gradient color scheme causes each set of siblings to be colored on a gradient starting from @racket[INITIALCOLOR] and changing by the end by the delta in @racket[COLORRANGES].  The gradient color scheme is currently inoperative.
+@racket[COLORSCHEME] may be @racket['alternate] or @racket['gradient], and can be changed by pressing ``F''.  The gradient color scheme causes each set of siblings to be colored on a gradient starting from @racket[INITIALCOLOR] and changing by the end by the delta in @racket[COLORRANGES].  The gradient color scheme is currently inoperative.
 
 For the alternate color scheme, we have the following logic to determine the color of a cell:
 
 @itemize[
+@item{If code-level (i.e. if this is the literal code in the file -- the ``lowest level''), then
+@itemize[
+	@item{if eldest child, then @racket[CODECOLOR3],}
+	@item{if odd-numbered child, then @racket[CODECOLOR1],}
+	@item{if even-numbered child, then @racket[CODECOLOR2].}]}
+
 @item{If in odd-numbered row, then
 @itemize[
 	@item{if eldest child, then @racket[COLOR5],}
@@ -129,13 +135,16 @@ The file to be parsed.
 
 (define Roles ROLES)]
 
-A hash whereby a keyword is associated with a list of length two.  In this list, the first element is a list of "hint" names for the children of this function.  The second element is a function which takes the child number and is called to generate names for children after those named in the first element.
+A hash whereby a keyword is associated with a list of length two.  In this hash, the first element is a list of ``hint'' names for the children of this function.  The second element is a function which takes the child number and is called to generate names for children after those named in the first element.
 
 @section{Global variables}
 
 Global variables and programmatically-defined constants
 
 @chunk[<global-variables>
+<def-args> <def-utterance-tree> <def-open> <def-selection> <def-scroll-offset> <def-mouse-pos> <def-zoom-factor> <def-font>]
+
+@chunk[<def-args>
 (define ARGS
  (ess-man->ess-addr
   (ess-expr->ess-man
@@ -143,8 +152,6 @@ Global variables and programmatically-defined constants
     (call-with-input-file FILENAME
      (lambda (f)
       (read-accept-reader #t)
-;      (read f)
-;      (read-language f)
       (define (in rem)
        (let ((x (read rem)))
 	(if (eof-object? x)
@@ -154,120 +161,118 @@ Global variables and programmatically-defined constants
    'root
    '()
    (hash))
-  (list)))
-(define Rows '())
-(define Utterance-tree #f)
-(define Root ARGS)
-(define Open (set))
-(define Selection (ess-utterance ARGS 0 0 0 0 0 0 '() #f))
+  (list)))]
+
+The syntax tree as an @racket[ess-man].  Reads the file defined in @racket[FILENAME] and converts it.  This should be constant so long as the code does not change.
+
+@chunk[<def-utterance-tree>
+(define Utterance-tree #f)]
+
+The utterance tree.  This regenerates often (see @racket[generate-utterance-tree]).
+
+@chunk[<def-open>
+(define Open (set))]
+
+The set of open @racket[ess-addr]s.  If an @racket[ess-addr] is listed here, then its children are visible (i.e. are part of @racket[Utterance-tree]).  See @racket[open?] and @racket[closed?].
+
+@chunk[<def-selection>
+(define Selection (ess-utterance ARGS 0 0 0 0 0 0 '() #f))]
+
+The currently selected utterance.  This is colored according to @racket[SELCOLOR] and many input events act on this utterance.  The selection is changed by some input events.
+
+@chunk[<def-scroll-offset>
 (define Scroll-offset-x 0)
-(define Scroll-offset-y 0)
-(define Gens '())
-(define Mouse-pos (cons -1 -1))
-(define Zoom-factor 1)
-(define Font (ftglCreateBitmapFont "/home/philip/vilisp/VeraMono.ttf"))
-]
+(define Scroll-offset-y 0)]
 
-@section{Define functions}
+The scroll offsets, in absolute coordinates.  If the offsets for x and y are a and b, then the upper left corner of the viewport is at (-a,-b).  This is primarily changed by the scrollwheel, but zooming can also change this.
 
-@chunk[<define-functions>
-<utility-functions>
-<struct/class-declarations>
-<conversion-functions>
-<find-functions>
-<paint-functions>
-<dimensions-functions>
-<selection-functions>]
+@chunk[<def-mouse-pos>
+(define Mouse-pos (cons -1 -1))]
 
-@subsection{Utility functions}
+The last-recorded position of the mouse, in relative coordinates.  Used for dragging.
 
-@chunk[<utility-functions>
-(define (border?) (eq? COLORSCHEME 'gradient))
-(define (get-color addr siblings)
- (if (eq? addr (ess-utterance-addr Selection))
-  SELCOLOR
-  (if (eq? COLORSCHEME 'gradient)
-   (let* ((pos (if (null? (ess-addr-laddr addr)) 0 (last (ess-addr-laddr addr))))
-	  (diff (/ pos (if (zero? siblings) 1 siblings)))
-	  (col (map + INITIALCOLOR (map round (map * (make-list 3 diff) COLORRANGES)))))
-    (if (null? (ess-man-args (ess-addr-man addr)))
-     CODECOLOR1
-     (cons (apply make-object color% FGCOLOR) (apply make-object color% col))))
-   (let* ((row (length (ess-addr-laddr addr)))
-	  (col (if (null? (ess-addr-laddr addr)) 0 (last (ess-addr-laddr addr)))))
-    (if (null? (ess-man-args (ess-addr-man addr)))
-     (if (zero? col) CODECOLOR3 (if (odd? col) CODECOLOR1 CODECOLOR2))
-     (if (odd? row)
-      (if (zero? col) COLOR5 (if (odd? col) COLOR1 COLOR2))
-      (if (zero? col) COLOR6 (if (odd? col) COLOR3 COLOR4))))))))
-(define (center offset lenwhole lenpiece start width)
- (let ((naive (+ (max offset start) (/ (min lenwhole (+ lenwhole offset) width (- (+ start width) offset)) 2) (- (/ lenpiece 2))))
-       (start-bound (- (+ offset lenwhole) lenpiece)))
-  (cond
-   ((> naive start-bound) start-bound)
-   ((> (+ naive lenpiece) (+ start width)) offset)
-   (#t naive))))
-(define (ess-expr-descendants expr)
- (cons expr (map ess-expr-descendants (ess-expr-args expr))))
-(define (ess-man-descendants man)
- (cons man (map ess-man-descendants (ess-man-args man))))
-(define (ess-addr-deep-args addr pred)
- (cons addr (if (pred addr) '() (map (lambda (a) (ess-addr-deep-args a pred)) (ess-addr-args addr)))))
-(define (inc lst pos)
- (if (> pos 0)
-  (append
-   (take lst pos)
-   (list (+ 1 (list-ref lst pos)))
-   (drop lst (+ 1 pos)))
-  (cons (+ 1 (car lst)) (cdr lst))))
-(define (ess-utterance-parent u)
- (apply find-utterance Utterance-tree
-  (if VERTICAL
-   (list (+ (ess-utterance-x u) -1) (ess-utterance-y u))
-   (list (ess-utterance-x u) (+ (ess-utterance-y u) -1)))))
-(define (ess-utterance-maj-dim u) (if VERTICAL (ess-utterance-y u) (ess-utterance-x u)))
-(define (ess-utterance-maj-dim-span u) (if VERTICAL (ess-utterance-h u) (ess-utterance-w u)))
-(define (ess-utterance-min-dim u) (if VERTICAL (ess-utterance-x u) (ess-utterance-y u)))
-(define (ess-utterance-min-dim-span u) (if VERTICAL (ess-utterance-w u) (ess-utterance-h u)))
-(define (maj-dim x y) (if VERTICAL y x))
-(define (min-dim x y) (if VERTICAL x y))
-(define (get-role type n)
- (if (hash-has-key? Roles type)
-  (let ((r (hash-ref Roles type)))
-   (if (< n (length (car r)))
-    (list-ref (car r) n)
-    (if (null? (cadr r))
-     '()
-     ((cadr r) (- n (length (car r)))))))
-  '()))
-(define (invisible x y w h)
- (or
-  (and (< (+ x w) (- Scroll-offset-x)) (not VERTICAL))
-  (and (< (+ y h) (- Scroll-offset-y)) VERTICAL)
-  (> x (- (/ WIDTH Zoom-factor) Scroll-offset-x))
-  (> y (- (/ WIDTH Zoom-factor) Scroll-offset-y))))
-(define (ess-addr-args addr)
- (force (ess-addr-prom-args addr)))
-(define (ess-utterance-args u)
- (force (ess-utterance-prom-args u)))
-(define (get-ess-addr addr laddr)
- (if (null? laddr)
-  addr
-  (get-ess-addr (list-ref (ess-addr-args addr) (car laddr)) (cdr laddr))))
-(define (open? addr)
- (set-member? Open addr))
-(define (closed? addr)
- (not (open? addr)))
-]
+@chunk[<def-zoom-factor>
+(define Zoom-factor 1)]
 
-@subsection{Struct/class declarations}
+The zoom-factor, i.e. the ratio of change in relative coordinates to change in absolute coordinates.  Thus, if it is 1/2, then we are zoomed out so that everything is half as tall and half as wide.
+
+@chunk[<def-font>
+(define Font (ftglCreateBitmapFont "/home/philip/vilisp/VeraMono.ttf")) ]
+
+The font used for all text.  Two things are important:  the type of font, and the font itself.  The font file is a truetype font file.  The type of font is one of those allowed by FTGL.  We use Bitmap since it seems to have the best performance.  Pixmap is  a little slower but is a better rendering.  The others do not seem to work as-is.
+
+@section{Data Structures}
 
 @chunk[<struct/class-declarations>
-(struct ess-expr (name args type)) 
-(struct ess-man (expr text args role context))
-(struct ess-addr (man laddr prom-args))
-(struct ess-utterance (addr x y w h text-w text-h prom-args clr)) 
+<def-ess-expr> <def-ess-man> <def-ess-addr> <def-ess-utterance> <def-my-canvas> <def-win> <def-thecanvas>]
 
+@subsection{Code representation}
+
+The data is stored in four primary data structures:  ess-expressions, ess-manifestations, ess-addresses, and ess-utterances.  Each level is mapped onto the previous level.
+
+Not defined here (because the declaration is implicit) is the list-address type.  This is merely a list, where the null list corresponds to the root element and each element n corresponds to the nth child (indexed from zero).  Thus, @racket['(2 0 1)] corresponds to root's third child's first child's second child.  If an address is valid in one of the trees, then if it is valid in another, the two elements must correspond (i.e. one must (directly or indirectly) map to the other).
+
+@chunk[<def-ess-expr>
+(struct ess-expr (name args type))]
+
+Ess-expressions are the most basic representation of the code.  Each ess-expr is either an atomic datum or is defined in terms of its children.  In particular, an ess-expression has no information about its context (not even about primitive functions), and may be safely moved to a different context without worry (although I'm not sure why one would do that).
+
+The ess-expression tree is finite and eagerly evaluated.
+
+@racket[name] is a textual representation of the first argument.  In particular, if the first argument is not a list, then we try to convert it to a string.  Otherwise, we recursively create an ess-expression of the first argument and use its name.
+
+@racket[args] is a list of the children of this ess-expression, or null if this is code-level.  Unless @racket[type] is @racket['list] or @racket['fun], this must be null.
+
+@racket[type] is the type of this ess-expr.  This may be @racket['symbol], @racket['string], @racket['number], @racket['null], @racket['list], or @racket[fun] where @racket[fun] is the first element (which must be a symbol in that case).
+
+@chunk[<def-ess-man>
+(struct ess-man (expr text args role context))]
+
+Ess-manifestations are bijectively mapped onto ess-expressions (although this could be changed to a surjection without issue).  An ess-manifestation is an ess-expression plus information about its context.
+
+The ess-manifestation tree is finite and eagerly evaluated.
+
+@racket[expr] is the corresponding ess-expression.
+
+@racket[text] is a textual representation of the ess-expression.  This includes the @racket[name] of the ess-expression, and it may prepend or append contextual information.  If @racket[role] is not null, then it may be prepended. If the @racket[type] of the ess-expression is @racket['define], then we append the identifier being bound.
+
+@racket[args] is a list of the children of this ess-manifestation, or null if this is code-level.  The ess-expression of each child must correspond to a child of the ess-expression of this ess-manifestation.  In other words, the mapping from ess-manifestations to ess-expressions preserves structure.
+
+@racket[role] is the role of this ess-manifestation, or null.  If the @racket[type] of the parent is found in @racket[ROLES], then this child is given the role found therein.
+
+@racket[context] is a hash of all defined identifiers in the current context.  The keys are the identifier names (in symbol format), and the values are the list-addresses of the reference manifestations (i.e. the manifestation that defines the identifier).
+
+@chunk[<def-ess-addr>
+(struct ess-addr (man laddr prom-args))]
+
+Ess-addresses are surjectively mapped onto ess-manifestations.  An ess-address is an ess-manifestation plus a list-address.  Crucially, whenever an identifer is referenced which is in the @racket[context] of the ess-manifestation, another copy of the reference implementation is created inline, so that one may merely open up the identifier to see its implementation.  In recursive definitions, this creates an infinite tree.  Thus, this tree is lazily evaluated.
+
+The ess-address tree is usually infinite and lazily evaluated.
+
+@racket[man] is the corresponding ess-manifestation.
+
+@racket[laddr] is the list-address of this element.
+
+@racket[prom-args] is a lazily generated list of children.  Either the ess-manifestation of each child must correspond to a child of the ess-manifestation of the ess-address or else this is ``symlink'', so the ess-manifestation of the only child is the reference implementation of this ess-manifestation.  In other words, the mapping from ess-addresses to ess-manifestations preserves the existing structure of the ess-manifestation, but may add on additional structure.  This is merely the promise.  Usually, one uses @racket[ess-addr-args] to force and access this.
+
+@chunk[<def-ess-utterance>
+(struct ess-utterance (addr x y w h text-w text-h args clr))]
+
+Ess-utterances are injectively mapped onto ess-addresses.  An ess-utterance is an ess-address plus information required to draw it to the screen.
+
+The ess-utterance tree is finite and eagerly evaluated.
+
+@racket[addr] is the corresponding ess-address.
+
+@racket[x] and @racket[y] are the upper left coordinates of the utterance, and @racket[w] and @racket[h] are the width and height of the utterance, and @racket[text-w] and @racket[text-h] are the width and height of the text.  These are in absolute coordinates.
+
+@racket[args] is a list of children, or null no children should be displayed (i.e. if the ess-addr is closed or if it is both code-level and there is no expansion of this identifier).  The ess-address of each child must correspond to a child of the ess-address of this ess-utterance.  In other words, the mapping from ess-utterances to ess-addresses preserves the structure of the ess-utterance.
+
+@racket[clr] is the color of this ess-utterance.  It is a pair where the first element is the foreground color and the second element is the background color.  This is determined by the @racket[COLORSCHEME].
+
+@subsection{GUI representation}
+
+@chunk[<def-my-canvas>
 (define (resize w h)
  (gl-viewport 0 0 w h)
  #t)
@@ -370,13 +375,103 @@ Global variables and programmatically-defined constants
       (set! Scroll-offset-y (+ (- SCROLLDIST) Scroll-offset-y)))
      (send this on-paint))))
 
-  (super-instantiate () (style '(gl)))))
+  (super-instantiate () (style '(gl)))))]
 
-(define win (new frame% (label "vilisp") (min-width WIDTH) (min-height HEIGHT)))
-(define Thecanvas (new my-canvas% (parent win)))
+@chunk[<def-win>
+(define win (new frame% (label "vilisp") (min-width WIDTH) (min-height HEIGHT)))]
 
+@chunk[<def-thecanvas>
+(define Thecanvas (new my-canvas% (parent win)))]
+
+@section{Functions}
+
+@chunk[<define-functions>
+<utility-functions>
+<struct/class-declarations>
+<conversion-functions>
+<find-functions>
+<paint-functions>
+<dimensions-functions>
+<selection-functions>]
+
+@subsection{Utility functions}
+
+@chunk[<utility-functions>
+(define (border?) (eq? COLORSCHEME 'gradient))
+(define (get-color addr siblings)
+ (if (eq? addr (ess-utterance-addr Selection))
+  SELCOLOR
+  (if (eq? COLORSCHEME 'gradient)
+   (let* ((pos (if (null? (ess-addr-laddr addr)) 0 (last (ess-addr-laddr addr))))
+	  (diff (/ pos (if (zero? siblings) 1 siblings)))
+	  (col (map + INITIALCOLOR (map round (map * (make-list 3 diff) COLORRANGES)))))
+    (if (null? (ess-man-args (ess-addr-man addr)))
+     CODECOLOR1
+     (cons (apply make-object color% FGCOLOR) (apply make-object color% col))))
+   (let* ((row (length (ess-addr-laddr addr)))
+	  (col (if (null? (ess-addr-laddr addr)) 0 (last (ess-addr-laddr addr)))))
+    (if (null? (ess-man-args (ess-addr-man addr)))
+     (if (zero? col) CODECOLOR3 (if (odd? col) CODECOLOR1 CODECOLOR2))
+     (if (odd? row)
+      (if (zero? col) COLOR5 (if (odd? col) COLOR1 COLOR2))
+      (if (zero? col) COLOR6 (if (odd? col) COLOR3 COLOR4))))))))
+(define (center offset lenwhole lenpiece start width)
+ (let ((naive (+ (max offset start) (/ (min lenwhole (+ lenwhole offset) width (- (+ start width) offset)) 2) (- (/ lenpiece 2))))
+       (start-bound (- (+ offset lenwhole) lenpiece)))
+  (cond
+   ((> naive start-bound) start-bound)
+   ((> (+ naive lenpiece) (+ start width)) offset)
+   (#t naive))))
+(define (ess-expr-descendants expr)
+ (cons expr (map ess-expr-descendants (ess-expr-args expr))))
+(define (ess-man-descendants man)
+ (cons man (map ess-man-descendants (ess-man-args man))))
+(define (ess-addr-deep-args addr pred)
+ (cons addr (if (pred addr) '() (map (lambda (a) (ess-addr-deep-args a pred)) (ess-addr-args addr)))))
+(define (inc lst pos)
+ (if (> pos 0)
+  (append
+   (take lst pos)
+   (list (+ 1 (list-ref lst pos)))
+   (drop lst (+ 1 pos)))
+  (cons (+ 1 (car lst)) (cdr lst))))
+(define (ess-utterance-parent u)
+ (apply find-utterance Utterance-tree
+  (if VERTICAL
+   (list (+ (ess-utterance-x u) -1) (ess-utterance-y u))
+   (list (ess-utterance-x u) (+ (ess-utterance-y u) -1)))))
+(define (ess-utterance-maj-dim u) (if VERTICAL (ess-utterance-y u) (ess-utterance-x u)))
+(define (ess-utterance-maj-dim-span u) (if VERTICAL (ess-utterance-h u) (ess-utterance-w u)))
+(define (ess-utterance-min-dim u) (if VERTICAL (ess-utterance-x u) (ess-utterance-y u)))
+(define (ess-utterance-min-dim-span u) (if VERTICAL (ess-utterance-w u) (ess-utterance-h u)))
+(define (maj-dim x y) (if VERTICAL y x))
+(define (min-dim x y) (if VERTICAL x y))
+(define (get-role type n)
+ (if (hash-has-key? Roles type)
+  (let ((r (hash-ref Roles type)))
+   (if (< n (length (car r)))
+    (list-ref (car r) n)
+    (if (null? (cadr r))
+     '()
+     ((cadr r) (- n (length (car r)))))))
+  '()))
+(define (invisible x y w h)
+ (or
+  (and (< (+ x w) (- Scroll-offset-x)) (not VERTICAL))
+  (and (< (+ y h) (- Scroll-offset-y)) VERTICAL)
+  (> x (- (/ WIDTH Zoom-factor) Scroll-offset-x))
+  (> y (- (/ WIDTH Zoom-factor) Scroll-offset-y))))
+(define (ess-addr-args addr)
+ (force (ess-addr-prom-args addr)))
+(define (get-ess-addr addr laddr)
+ (if (null? laddr)
+  addr
+  (get-ess-addr (list-ref (ess-addr-args addr) (car laddr)) (cdr laddr))))
+(define (open? addr)
+ (set-member? Open addr))
+(define (closed? addr)
+ (not (open? addr)))
 (define (generate-utterance-tree addr)
-    (set! Rows '())
     (set! Utterance-tree (ess-addr->ess-utterance addr 0 0 (if VERTICAL (ess-addr-width ARGS (send Thecanvas get-dc)) -1) 0 (send Thecanvas get-dc) 1))
     (set! Selection (find-utterance-from-addr Utterance-tree (ess-utterance-addr Selection))))
 ]
