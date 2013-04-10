@@ -1,5 +1,10 @@
 #lang scribble/lp
 
+@require{docs/proofs.rkt}
+
+@setup-math
+@elem[#:style test-style]{}
+
 @chunk[<*>
 <require-libraries>
 <define-constants>
