@@ -6,7 +6,7 @@
 	 scribble/base
 	 scribble/core)
 
-(provide setup-math math-in math-disp $ $$ test-style theorem proof)
+(provide setup-math math-in math-disp $ $$ setup-proofs theorem proof)
 
 (define mathjax-source
    "http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"
@@ -14,9 +14,11 @@
        ;"http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-HTML"
 	 )
 
-(define test-style
- (make-style "emph"
-  (list #f (make-tex-addition "docs/extry.tex"))))
+(define setup-proofs
+ (paragraph
+  (style #f
+   (list #f (make-tex-addition "docs/extry.tex")))
+  '()))
 
 (define setup-math
  (paragraph 

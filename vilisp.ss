@@ -3,7 +3,7 @@
 @require{docs/proofs.rkt}
 
 @setup-math
-@elem[#:style test-style]{}
+@setup-proofs
 
 @chunk[<*>
 <require-libraries>
@@ -49,7 +49,9 @@ We import the racket/gui library for creating the window and managing the input.
 @chunk[<def-vertical>
 (define VERTICAL #f)]
 
-If true, then the major dimension is vertical.  Thus, the tree opens left-to-right instead of top-to-bottom.  This is not actually a constant (it can be changed by pressing the ``f'' key).
+If true, then the major dimension is vertical, and the tree opens left-to-right.  Else, the major dimension is horizontal, and the tree opens top-to-bottom.  This is not actually a constant (it can be changed by pressing the ``f'' key).
+
+Rigorously, if @racket{VERTICAL} is true, then y is the major dimension, h is the span over the major dimension, x is the minor dimension, and w is the span over the minor dimension.  If @racket{VERTICAL} is false, then x is the major dimension, w is the span over the major dimension, y is the minor dimension, and h is the span over the minor dimension.
 
 @chunk[<def-width/height>
 (define WIDTH (* 1 1600))
@@ -391,8 +393,8 @@ The ess-utterance tree is finite and eagerly evaluated.
 @section{Functions}
 
 @chunk[<define-functions>
-<utility-functions>
 <struct/class-declarations>
+<utility-functions>
 <conversion-functions>
 <find-functions>
 <paint-functions>
@@ -402,7 +404,17 @@ The ess-utterance tree is finite and eagerly evaluated.
 @subsection{Utility functions}
 
 @chunk[<utility-functions>
-(define (border?) (eq? COLORSCHEME 'gradient))
+<def-border> <def-get-color> <def-center> <def-ess-addr-deep-args> <def-ess-utterance-parent> <def-maj/min/span-dimensions>
+<def-get-role> <def-invisible> <def-ess-addr-args> <def-get-ess-addr> <def-open?/closed?> <def-generate-utterance-tree>]
+
+@chunk[<def-border>
+(define (border?) (eq? COLORSCHEME 'gradient))]
+
+Returns true if we are using a color scheme that requires a border.
+
+Runs in constant time.
+
+@chunk[<def-get-color>
 (define (get-color addr siblings)
  (if (eq? addr (ess-utterance-addr Selection))
   SELCOLOR
@@ -419,38 +431,86 @@ The ess-utterance tree is finite and eagerly evaluated.
      (if (zero? col) CODECOLOR3 (if (odd? col) CODECOLOR1 CODECOLOR2))
      (if (odd? row)
       (if (zero? col) COLOR5 (if (odd? col) COLOR1 COLOR2))
-      (if (zero? col) COLOR6 (if (odd? col) COLOR3 COLOR4))))))))
+      (if (zero? col) COLOR6 (if (odd? col) COLOR3 COLOR4))))))))]
+
+@racket[addr] is an ess-address, and @racket[siblings] is the number of siblings it has.  This returns the color of this ess-address, as determined by @racket[COLORSCHEME].
+
+Runs in constant time.
+
+@chunk[<def-center>
 (define (center offset lenwhole lenpiece start width)
- (let ((naive (+ (max offset start) (/ (min lenwhole (+ lenwhole offset) width (- (+ start width) offset)) 2) (- (/ lenpiece 2))))
-       (start-bound (- (+ offset lenwhole) lenpiece)))
-  (cond
-   ((> naive start-bound) start-bound)
-   ((> (+ naive lenpiece) (+ start width)) offset)
-   (#t naive))))
-(define (ess-expr-descendants expr)
- (cons expr (map ess-expr-descendants (ess-expr-args expr))))
-(define (ess-man-descendants man)
- (cons man (map ess-man-descendants (ess-man-args man))))
+ (let ((visible-width (- (min (+ offset lenwhole) (+ start width)) (max offset start))))
+  (if (< visible-width lenpiece)
+   (if (< offset start)
+    (- (+ offset lenwhole) lenpiece)
+    offset)
+   (+ (max offset start) (/ visible-width 2) (- (/ lenpiece 2))))))]
+
+@racket[offset] is the starting point of a line segment.
+
+@racket[lenwhole] is the length of the line segment.
+
+@racket[lenpiece] is the length of a smaller line segment that is entirely in the visible portion of the larger line segment, and subject to this, it is centered relative to the visible portion of the larger line segment.
+
+@racket[start] is the starting edge of the viewport.
+
+@racket[width] is the size of the viewport.
+
+Informally, we return the required starting point for the smaller line segment to be centered within the visible portion of the larger line segment.
+
+We assume that @${lenpiece \le lenwhole} and @${lenpiece \le width}.
+
+Runs in constant time.
+
+@theorem{If @${L = [offset,offset+lenwhole]} and @${V = [start,start+width]}, then @racket[center] is such that @${l = [center,center+lenpiece] \subseteq L}, and subject to this @${l \cap V} is maximum, and if @${l \subseteq V}, then @${center + \frac{1}{2} lenpiece = \max\{offset,start\} + \frac{1}{2} width}.}
+
+@proof{First, note that @$${visiblewidth = \min\{offset+lenwhole,start+width\} - \max\{offset,start\}} is the width of @${L \cap V}.  We have two cases.
+
+@itemize[
+@item{If @${visiblewidth < lenpiece}, then @${l \not\subseteq V}.  Since @${offset+lenwhole \ge center + lenpiece}, we have @${center \le offset + lenwhole - lenpiece}.  Also, @${center \ge offset}.  Then, we have two cases.
+@itemize[
+	@item{If @${offset < start}, then since the size of @${l \cap V} increases as @${center} increases, we let @${center = offset + lenwhole - lenpiece}.}
+
+	@item{If @${offset \ge start}, then since the size of @${l \cap V} decreases as @${center} increases, we let @${center = offset}.}]}
+
+@item{If @${visiblewidth \ge lenpiece}, then @${l \subseteq V}.  Then, since @${center + \frac{1}{2} lenpiece = \max\{offset,start\} + \frac{1}{2} width}, we have @${center = \max\{offset,start\} + \frac{1}{2} width - \frac{1}{2} lenpiece}.}]}
+
+@chunk[<def-ess-addr-deep-args>
 (define (ess-addr-deep-args addr pred)
- (cons addr (if (pred addr) '() (map (lambda (a) (ess-addr-deep-args a pred)) (ess-addr-args addr)))))
-(define (inc lst pos)
- (if (> pos 0)
-  (append
-   (take lst pos)
-   (list (+ 1 (list-ref lst pos)))
-   (drop lst (+ 1 pos)))
-  (cons (+ 1 (car lst)) (cdr lst))))
+ (cons addr (if (pred addr) '() (map (lambda (a) (ess-addr-deep-args a pred)) (ess-addr-args addr)))))]
+
+Returns a deep list of the children of @racket[addr], recursing until @racket[pred] is false.
+
+Runs, technically, in amortized linear time relative to the number of descendants of @racket[addr].  In practice, @racket[addr] often has an infinite number of descendants, so it is important to ensure @racket[pred] will eventually return false.  This runs, then, in linear time relative to the number of descendants of @racket[addr] until @racket[pred] is false.
+
+Note that this references @racket[ess-addr-args], so if these have not yet been generated, they will be generated.
+
+@chunk[<def-ess-utterance-parent>
 (define (ess-utterance-parent u)
  (apply find-utterance Utterance-tree
   (if VERTICAL
    (list (+ (ess-utterance-x u) -1) (ess-utterance-y u))
-   (list (ess-utterance-x u) (+ (ess-utterance-y u) -1)))))
+   (list (ess-utterance-x u) (+ (ess-utterance-y u) -1)))))]
+
+Returns the parent of @racket[u].
+
+Internally, we find the parent by identifying the utterance one absolute pixel in the major dimension from @racket[u].
+
+Runs in the same complexity class as find-utterance, which is worst-case linear, but average-case logarithmic relative to the size of the utterance tree.
+
+@chunk[<def-maj/min/span-dimensions>
 (define (ess-utterance-maj-dim u) (if VERTICAL (ess-utterance-y u) (ess-utterance-x u)))
 (define (ess-utterance-maj-dim-span u) (if VERTICAL (ess-utterance-h u) (ess-utterance-w u)))
 (define (ess-utterance-min-dim u) (if VERTICAL (ess-utterance-x u) (ess-utterance-y u)))
 (define (ess-utterance-min-dim-span u) (if VERTICAL (ess-utterance-w u) (ess-utterance-h u)))
 (define (maj-dim x y) (if VERTICAL y x))
-(define (min-dim x y) (if VERTICAL x y))
+(define (min-dim x y) (if VERTICAL x y))]
+
+Returns the value in a particular dimension, as defined by @racket{VERTICAL}.
+
+Runs in constant time.
+
+@chunk[<def-get-role>
 (define (get-role type n)
  (if (hash-has-key? Roles type)
   (let ((r (hash-ref Roles type)))
@@ -459,31 +519,65 @@ The ess-utterance tree is finite and eagerly evaluated.
     (if (null? (cadr r))
      '()
      ((cadr r) (- n (length (car r)))))))
-  '()))
+  '()))]
+
+Returns the role of the @racket[n]th child of an element of @racket[type].  Found by looking up in @racket[Roles].
+
+Runs in constant time (or, rarely, the complexity class of the function found in Roles).
+
+@chunk[<def-invisible>
 (define (invisible x y w h)
  (or
   (and (< (+ x w) (- Scroll-offset-x)) (not VERTICAL))
   (and (< (+ y h) (- Scroll-offset-y)) VERTICAL)
   (> x (- (/ WIDTH Zoom-factor) Scroll-offset-x))
-  (> y (- (/ WIDTH Zoom-factor) Scroll-offset-y))))
-(define (ess-addr-args addr)
- (force (ess-addr-prom-args addr)))
+  (> y (- (/ WIDTH Zoom-factor) Scroll-offset-y))))]
+
+Returns true if the rectangle is visible, or if its children may be visible.
+
+Runs in constant time.
+
+@chunk[<def-ess-addr-args>
+(define ess-addr-args (compose force ess-addr-prom-args))]
+
+Forces the generation of the children of @racket[addr].
+
+Runs in constant time except the first time, when it runs in linear time relative to the number of children.  See @racket[ess-man->ess-addr] to see what is being forced.
+
+@chunk[<def-get-ess-addr>
 (define (get-ess-addr addr laddr)
  (if (null? laddr)
   addr
-  (get-ess-addr (list-ref (ess-addr-args addr) (car laddr)) (cdr laddr))))
+  (get-ess-addr (list-ref (ess-addr-args addr) (car laddr)) (cdr laddr))))]
+
+Returns the ess-address at the given list-address.
+
+Runs in linear time relative to the length of @racket[laddr].
+
+@chunk[<def-open?/closed?>
 (define (open? addr)
  (set-member? Open addr))
-(define (closed? addr)
- (not (open? addr)))
+(define closed? (negate open?))]
+
+Predicates to check if an ess-address is open (i.e. it is in @racket[Open]).
+
+Runs in constant time.
+
+@chunk[<def-generate-utterance-tree>
 (define (generate-utterance-tree addr)
     (set! Utterance-tree (ess-addr->ess-utterance addr 0 0 (if VERTICAL (ess-addr-width ARGS (send Thecanvas get-dc)) -1) 0 (send Thecanvas get-dc) 1))
-    (set! Selection (find-utterance-from-addr Utterance-tree (ess-utterance-addr Selection))))
-]
+    (set! Selection (find-utterance-from-addr Utterance-tree (ess-addr-laddr (ess-utterance-addr Selection)))))]
+
+Regenerates the utterance tree from @racket[addr].
+
+Runs in the complexity class of @racket[ess-addr->ess-utterance].
 
 @subsection{Conversion functions}
 
 @chunk[<conversion-functions>
+<def-list->ess-expr> <def-ess-expr->ess-man> <def-ess-man->ess-addr> <def-ess-addr->ess-utterance>]
+
+@chunk[<def-list->ess-expr> 
 (define (list->ess-expr l)
  (apply
   ess-expr
@@ -497,8 +591,27 @@ The ess-utterance tree is finite and eagerly evaluated.
      (ess-expr-name (list->ess-expr (car l)))
      (map list->ess-expr l)
      (if (symbol? (car l)) (car l) 'list)))
-   (#t (list "--" '() 'unknown)))))
+   (#t (list "--" '() 'unknown)))))]
 
+Converts a list of code into ess-expressions.  See @racket[ess-expr]
+
+If @racket[l] is not a list, then we try to convert it into a string and store it in @racket[name].  Currently supported are symbols, strings, numbers, and null.  If it is a list, then we recursively create an ess-expression of the first argument and use its name.  If we don't recoginze the type, then we use @racket["--"].
+
+If @racket[l] is not a list, then @racket[args] is null.  Else, @racket[args] is the recursive map of the elements of @racket[l].
+
+@racket[type] is defined as follows:
+
+@itemize[
+@item{If @racket[l] is symbol, then @racket['symbol].}
+@item{If @racket[l] is string then @racket['string].}
+@item{If @racket[l] is number then @racket['number].}
+@item{If @racket[l] is null, then @racket['null].}
+@item{If @racket[l] is list, then if first element is symbol, then that symbol, else @racket['list].}
+@item{If @racket[l] is other type, then @racket['unknown].}]
+
+Runs in linear time with the number of descendants of @racket[l], that is, the length of the code.
+
+@chunk[<def-ess-expr->ess-man>
 (define (ess-expr->ess-man expr role laddr context)
  (ess-man
   expr
@@ -526,8 +639,19 @@ The ess-utterance tree is finite and eagerly evaluated.
     (ess-expr-args expr)
     (build-list (length (ess-expr-args expr)) values)))
   role
-  context))
+  context))]
 
+Converts an ess-expression into an ess-manifestation.
+
+@racket[expr], @racket[role], and @racket[context] are passed as-is to the constructor of the ess-manifestation.
+
+For @racket[text], we have the @racket[name] of @racket[expr] prepended with the role (if not null) and appended with the identifier if @racket[type] is @racket['define].
+
+When recursively converting the children of @racket[expr], we first generate the new context by checking if each child is of @racket[type] @racket['define].  For each one, we add an entry to the context for the children.  Then, we recursively map ourselves onto the children, updating the address and role fro each one.
+
+Runs in linear time with the number of descendants of @racket[expr].
+
+@chunk[<def-ess-man->ess-addr>
 (define (ess-man->ess-addr man laddr)
  (ess-addr man laddr
   (delay
@@ -544,8 +668,17 @@ The ess-utterance tree is finite and eagerly evaluated.
     (map
      (lambda (arg n) (ess-man->ess-addr arg (append laddr (list n))))
      (ess-man-args man)
-     (build-list (length (ess-man-args man)) values))))))
+     (build-list (length (ess-man-args man)) values))))))]
 
+Converts an ess-manifestation into an ess-address.
+
+@racket[man] and @racket[laddr] are passed as-is to the constructor of the ess-address.
+
+We recursively, but lazily, convert each of the children of @racket[man].  Alternatively, if we are at code level, then we let @racket[args] be the reference implementation of the given ess-manifestation.
+
+Runs in constant time (remember that it does not eagerly generate children).
+
+@chunk[<def-ess-addr->ess-utterance>
 (define (ess-addr->ess-utterance addr x y w row dc siblings)
  (let ((children 
 	(if (closed? addr)
@@ -581,8 +714,23 @@ The ess-utterance tree is finite and eagerly evaluated.
    (box-width (ess-man-text (ess-addr-man addr)))
    (box-height (ess-man-text (ess-addr-man addr)))
    children
-   (get-color addr siblings)))) 
-]
+   (get-color addr siblings))))]
+
+Converts an ess-address to an ess-utterance.
+
+@racket[addr], @racket[x], and @racket[y] are passed as-is to the constructor of the ess-utterance.
+
+For the width, if @racket[VERTICAL] is true, then we use @racket[w].  Else we use the max of the width of @racket[text] and the sum of the widths of each of the children.
+
+For the height, we call @racket[ess-addr-height].
+
+For the @racket[text-w], we use the width of @racket[text].
+
+For the @racket[text-h], we use the height of @racket[text].
+
+For the @racket[color], we call @racket[get-color].
+
+For the @racket[args], we recursively ``map'' ourselves onto the children of @racket[addr].  It is not a true map since the major dimension of each child is determined by the sum of the major dimension spans of all previous children.  Additionally, if @racket[VERTICAL] is true, then the width of each child is determined by the maximum width of any child.
 
 @subsection{Find functions}
 
@@ -601,13 +749,10 @@ The ess-utterance tree is finite and eagerly evaluated.
      #f))
    (ess-utterance-args root))))
 
-(define (find-utterance-from-addr tree addr)
- (if (eq? (ess-utterance-addr tree) addr)
+(define (find-utterance-from-addr tree laddr)
+ (if (null? laddr)
   tree
-  (ormap
-   (lambda (child) (find-utterance-from-addr child addr))
-   (ess-utterance-args tree))))
-]
+  (find-utterance-from-addr (list-ref (ess-utterance-args tree) (car laddr)) (cdr laddr))))]
 
 @subsection{Paint functions}
 
@@ -630,7 +775,7 @@ The ess-utterance tree is finite and eagerly evaluated.
      (draw-text
       text
       (* Zoom-factor (center x w text-w (- Scroll-offset-x) WIDTH))
-      (* Zoom-factor (+ text-h -3 (center y h text-h 0 HEIGHT)))
+      (* Zoom-factor (+ text-h -3 (center y h text-h (- Scroll-offset-y) HEIGHT)))
       (car clr)))
     (for-each (lambda (arg) (ess-utterance-paint arg dc)) args)))))
 
