@@ -16,6 +16,10 @@ c	need some kind of almost-inverse of open-many
 x	allow multiple selection (particularly for open/close)? -- perhaps not (since we now have vertical navigation)
 c	Selection follows the ess-expr in all cases except "close"
 
+Reorganize code.
+
+Get rid of dc's.
+
 Replace Zoom-factor with reciprocal
 
 Make prettier/faster text
