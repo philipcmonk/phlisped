@@ -532,19 +532,7 @@ The font used for all text.  Two things are important:  the type of font, and th
  (gl-viewport 0 0 w h)
  #t)
 
-(define-for-syntax hsh (hash
-			'clicked '(find-utterance Utterance-tree (- (/ (send event get-x) Zoom-factor) Scroll-offset-x) (- (/ (send event get-y) Zoom-factor) Scroll-offset-y))
-			'abs-x '(- (/ (send event get-x) Zoom-factor) Scroll-offset-x)
-			'abs-y '(- (/ (send event get-y) Zoom-factor) Scroll-offset-y)
-			'rel-x '(send event get-x)
-			'rel-y '(send event get-y)))
-
-(define-syntax (define-mouse-handler stx)
- (let* ((args (syntax->datum stx))
-	(reqs (cadr args))
-	(code (cddr args))
-	(vals (map (lambda (req) (list req (hash-ref hsh req))) reqs)))
-  (datum->syntax stx `(let ,vals ,@code))))
+<def-syntax-mouse-handler>
 
 (define my-canvas%
  (class* canvas% ()
@@ -570,81 +558,8 @@ The font used for all text.  Two things are important:  the type of font, and th
     (lambda ()
      (resize width height))))
 
-  (define/override (on-event event)
-   (cond
-    ((send event dragging?)
-     (define-mouse-handler (rel-x rel-y)
-      (cond
-       ((send event get-left-down)
-	(set! Scroll-offset-x (+ Scroll-offset-x (/ (+ (- (car Mouse-pos)) rel-x) Zoom-factor)))
-	(set! Scroll-offset-y (+ Scroll-offset-y (/ (+ (- (cdr Mouse-pos)) rel-y) Zoom-factor)))
-	(set! Mouse-pos (cons rel-x rel-y))
-	(send this on-paint)))))
-    ((eq? (send event get-event-type) 'left-down)
-     (define-mouse-handler (rel-x rel-y)
-      (set! Mouse-pos (cons rel-x rel-y))))
-    ((eq? (send event get-event-type) 'left-up)
-     (define-mouse-handler (clicked)
-      (select clicked)
-      (generate-utterance-tree ARGS)
-      (send this on-paint)))
-    ((eq? (send event get-event-type) 'middle-down)
-     (define-mouse-handler (clicked)
-      (select clicked)
-      (close-u Selection (send event get-control-down))))
-    ((eq? (send event get-event-type) 'right-down)
-     (define-mouse-handler (clicked)
-      (select clicked)
-      (open-u Selection (send event get-control-down))))
-    (#t '())))
-
-  (define/override (on-char event)
-   (cond
-    ((eq? (send event get-key-code) #\f)
-     (begin (set! VERTICAL (not VERTICAL)) (generate-utterance-tree ARGS) (send this on-paint)))
-    ((eq? (send event get-key-code) #\F)
-     (begin (set! COLORSCHEME (if (eq? COLORSCHEME 'gradient) 'alternate 'gradient)) (generate-utterance-tree ARGS) (send this on-paint)))
-    ((eq? (send event get-key-code) #\h)
-     (go 'left))
-    ((eq? (send event get-key-code) #\j)
-     (go 'down))
-    ((eq? (send event get-key-code) #\k)
-     (go 'up))
-    ((eq? (send event get-key-code) #\l)
-     (go 'right))
-    ((eq? (send event get-key-code) #\o)
-     (open-u Selection #f))
-    ((eq? (send event get-key-code) #\c)
-     (close-u Selection #f))
-    ((eq? (send event get-key-code) #\O)
-     (open-u Selection #t))
-    ((eq? (send event get-key-code) #\C)
-     (close-u Selection #t))
-    ((eq? (send event get-key-code) #\z)
-     (set! Scroll-offset-y (- (ess-utterance-y Selection)))
-     (set! Scroll-offset-x (- (ess-utterance-x Selection)))
-     (set! Zoom-factor (if (= Zoom-factor 1) (if VERTICAL (/ HEIGHT (ess-utterance-h Selection)) (/ WIDTH (ess-utterance-w Selection ))) 1))
-     (send this on-paint))
-    ((eq? (send event get-key-code) 'wheel-up)
-     (if VERTICAL
-      (set! Scroll-offset-y (+ SCROLLDIST Scroll-offset-y))
-      (set! Scroll-offset-x (+ SCROLLDIST Scroll-offset-x)))
-     (send this on-paint))
-    ((eq? (send event get-key-code) 'wheel-down)
-     (if VERTICAL
-      (set! Scroll-offset-y (+ (- SCROLLDIST) Scroll-offset-y))
-      (set! Scroll-offset-x (+ (- SCROLLDIST) Scroll-offset-x)))
-     (send this on-paint))
-    ((eq? (send event get-key-code) 'wheel-left)
-     (if VERTICAL
-      (set! Scroll-offset-x (+ SCROLLDIST Scroll-offset-x))
-      (set! Scroll-offset-y (+ SCROLLDIST Scroll-offset-y)))
-     (send this on-paint))
-    ((eq? (send event get-key-code) 'wheel-right)
-     (if VERTICAL
-      (set! Scroll-offset-x (+ (- SCROLLDIST) Scroll-offset-x))
-      (set! Scroll-offset-y (+ (- SCROLLDIST) Scroll-offset-y)))
-     (send this on-paint))))
+  <def-mouse-input>
+  <def-key-input>
 
   (super-instantiate () (style '(gl)))))]
 
@@ -924,6 +839,109 @@ Below we define the functions relating to input from the user.
 The last-recorded position of the mouse, in relative coordinates.  Used for dragging.
 
 The distance traversed by a single mouse wheel movement event.  Currently, this is in absolute coordinates, but that may change.
+
+@chunk[<def-syntax-mouse-handler>
+<def-mouse-handler-hash> <def-mouse-handler-syntax>]
+
+@chunk[<def-mouse-handler-syntax>
+(define-syntax (define-mouse-handler stx)
+ (let* ((args (syntax->datum stx))
+	(reqs (cadr args))
+	(code (cddr args))
+	(vals (map (lambda (req) (list req (hash-ref mouse-handler-hash req))) reqs)))
+  (datum->syntax stx `(let ,vals ,@code))))]
+
+This is a convenience macro for writing responses to mouse events.  Its usage is as follows:  @racket[(define-mouse-handler (data) code)].  @racket[(data)] is a list of symbols to be bound to their meaning.  For example, @racket['clicked] is bound to the ess-utterance that was clicked on.  For a list of all possible symbols, see @racket[mouse-handler-hash] (below).  @racket[code] is the actual handler.  This may refer to any of the symbols in @racket[data] (since they have now been bound).
+
+Note that this is dependent (through @racket[mouse-handler-hash]) on the mouse event being named ``@racket[event]''.
+
+@chunk[<def-mouse-handler-hash>
+(define-for-syntax mouse-handler-hash (hash
+			'clicked '(find-utterance Utterance-tree (- (/ (send event get-x) Zoom-factor) Scroll-offset-x) (- (/ (send event get-y) Zoom-factor) Scroll-offset-y))
+			'abs-x '(- (/ (send event get-x) Zoom-factor) Scroll-offset-x)
+			'abs-y '(- (/ (send event get-y) Zoom-factor) Scroll-offset-y)
+			'rel-x '(send event get-x)
+			'rel-y '(send event get-y)))]
+
+This is the hash for @racket[define-mouse-handler].  Keys are symbols and values are the code needed to calculate their value.
+
+@chunk[<def-mouse-input>
+  (define/override (on-event event)
+   (cond
+    ((send event dragging?)
+     (define-mouse-handler (rel-x rel-y)
+      (cond
+       ((send event get-left-down)
+	(set! Scroll-offset-x (+ Scroll-offset-x (/ (+ (- (car Mouse-pos)) rel-x) Zoom-factor)))
+	(set! Scroll-offset-y (+ Scroll-offset-y (/ (+ (- (cdr Mouse-pos)) rel-y) Zoom-factor)))
+	(set! Mouse-pos (cons rel-x rel-y))
+	(send this on-paint)))))
+    ((eq? (send event get-event-type) 'left-down)
+     (define-mouse-handler (rel-x rel-y)
+      (set! Mouse-pos (cons rel-x rel-y))))
+    ((eq? (send event get-event-type) 'left-up)
+     (define-mouse-handler (clicked)
+      (select clicked)
+      (generate-utterance-tree ARGS)
+      (send this on-paint)))
+    ((eq? (send event get-event-type) 'middle-down)
+     (define-mouse-handler (clicked)
+      (select clicked)
+      (close-u Selection (send event get-control-down))))
+    ((eq? (send event get-event-type) 'right-down)
+     (define-mouse-handler (clicked)
+      (select clicked)
+      (open-u Selection (send event get-control-down))))
+    (#t '())))]
+
+@chunk[<def-key-input>
+  (define/override (on-char event)
+   (cond
+    ((eq? (send event get-key-code) #\f)
+     (begin (set! VERTICAL (not VERTICAL)) (generate-utterance-tree ARGS) (send this on-paint)))
+    ((eq? (send event get-key-code) #\F)
+     (begin (set! COLORSCHEME (if (eq? COLORSCHEME 'gradient) 'alternate 'gradient)) (generate-utterance-tree ARGS) (send this on-paint)))
+    ((eq? (send event get-key-code) #\h)
+     (go 'left))
+    ((eq? (send event get-key-code) #\j)
+     (go 'down))
+    ((eq? (send event get-key-code) #\k)
+     (go 'up))
+    ((eq? (send event get-key-code) #\l)
+     (go 'right))
+    ((eq? (send event get-key-code) #\o)
+     (open-u Selection #f))
+    ((eq? (send event get-key-code) #\c)
+     (close-u Selection #f))
+    ((eq? (send event get-key-code) #\O)
+     (open-u Selection #t))
+    ((eq? (send event get-key-code) #\C)
+     (close-u Selection #t))
+    ((eq? (send event get-key-code) #\z)
+     (set! Scroll-offset-y (- (ess-utterance-y Selection)))
+     (set! Scroll-offset-x (- (ess-utterance-x Selection)))
+     (set! Zoom-factor (if (= Zoom-factor 1) (if VERTICAL (/ HEIGHT (ess-utterance-h Selection)) (/ WIDTH (ess-utterance-w Selection ))) 1))
+     (send this on-paint))
+    ((eq? (send event get-key-code) 'wheel-up)
+     (if VERTICAL
+      (set! Scroll-offset-y (+ SCROLLDIST Scroll-offset-y))
+      (set! Scroll-offset-x (+ SCROLLDIST Scroll-offset-x)))
+     (send this on-paint))
+    ((eq? (send event get-key-code) 'wheel-down)
+     (if VERTICAL
+      (set! Scroll-offset-y (+ (- SCROLLDIST) Scroll-offset-y))
+      (set! Scroll-offset-x (+ (- SCROLLDIST) Scroll-offset-x)))
+     (send this on-paint))
+    ((eq? (send event get-key-code) 'wheel-left)
+     (if VERTICAL
+      (set! Scroll-offset-x (+ SCROLLDIST Scroll-offset-x))
+      (set! Scroll-offset-y (+ SCROLLDIST Scroll-offset-y)))
+     (send this on-paint))
+    ((eq? (send event get-key-code) 'wheel-right)
+     (if VERTICAL
+      (set! Scroll-offset-x (+ (- SCROLLDIST) Scroll-offset-x))
+      (set! Scroll-offset-y (+ (- SCROLLDIST) Scroll-offset-y)))
+     (send this on-paint))))]
 
 @section{Preparados, listos, ya}
 
