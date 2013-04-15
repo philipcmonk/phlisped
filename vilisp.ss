@@ -37,6 +37,12 @@ The internals are fairly simple, conceptually.  Briefly, we read Racket code as 
 @chunk[<conversion-functions>
 <def-list->ess-expr> <def-ess-expr->ess-man> <def-ess-man->ess-addr> <def-ess-addr->ess-utterance>]
 
+@chunk[<paint-functions>
+<def-ess-utterance-paint> <def-draw-rectangle> <def-draw-text>]
+
+@chunk[<selection-functions>
+<def-go> <def-open-u> <def-close-u> <def-select>]
+
 @chunk[<utility-functions>
 <def-border> <def-get-color> <def-center> <def-ess-addr-deep-args> <def-ess-utterance-parent> <def-maj/min/span-dimensions>
 <def-get-role> <def-invisible> <def-ess-addr-args> <def-find-addr-from-laddr> <def-open?/closed?> <def-generate-utterance-tree> <def-find-utterance-from-laddr> <def-find-utterance>]
@@ -538,6 +544,17 @@ The font used for all text.  Two things are important:  the type of font, and th
  (class* canvas% ()
   (inherit with-gl-context swap-gl-buffers)
 
+  <def-paint-handler>
+  <def-mouse-input>
+  <def-key-input>
+
+  (super-instantiate () (style '(gl)))))]
+
+The racket side of the openGL canvas.  Handles painting and mouse/keyboard input.
+
+@subsection{Paint functions}
+
+@chunk[<def-paint-handler>
   (define/override (on-paint)
    (with-gl-context
     (lambda ()
@@ -551,21 +568,13 @@ The font used for all text.  Two things are important:  the type of font, and th
      (gl-load-identity)
 
      (ess-utterance-paint Utterance-tree)
-     (swap-gl-buffers))))
+     (swap-gl-buffers))))]
 
-  (define/override (on-size width height)
-   (with-gl-context
-    (lambda ()
-     (resize width height))))
+Resets the openGL buffer, sets the view, and calls @racket[ess-utterance-paint] with @racket[Utterance-tree].
 
-  <def-mouse-input>
-  <def-key-input>
+Runs in the computational complexity of @racket[ess-utterance-paint].
 
-  (super-instantiate () (style '(gl)))))]
-
-@subsection{Paint functions}
-
-@chunk[<paint-functions>
+@chunk[<def-ess-utterance-paint> 
 (define (ess-utterance-paint u)
  (let* ((text (ess-man-text (ess-addr-man (ess-utterance-addr u))))
 	(x (ess-utterance-x u))
@@ -586,8 +595,13 @@ The font used for all text.  Two things are important:  the type of font, and th
       (* Zoom-factor (center x w text-w (- Scroll-offset-x) WIDTH))
       (* Zoom-factor (+ text-h -3 (center y h text-h (- Scroll-offset-y) HEIGHT)))
       (car clr)))
-    (for-each (lambda (arg) (ess-utterance-paint arg)) args)))))
+    (for-each (lambda (arg) (ess-utterance-paint arg)) args)))))]
 
+Checks if an ess-utterance is visible, and if so, paints it and recursively maps onto its children.  Drawing an ess-utterance means drawing a rectangle with attributes defined in the ess-utterance, and then drawing text on top of it.  Only draws text if not zoomed out further than natural (@racket[Zoom-factor] of @racket[1]).
+
+Runs in linear time (with a fairly high constant) relative to the number of visible ess-utterances (which may be very large if zoomed out far).
+
+@chunk[<def-draw-rectangle>
 (define (draw-rectangle clr x y w h)
  (gl-color (/ (car clr) 255) (/ (cadr clr) 255) (/ (caddr clr) 255))
 
@@ -596,18 +610,26 @@ The font used for all text.  Two things are important:  the type of font, and th
  (gl-vertex (+ x w) (- y))
  (gl-vertex (+ x w) (- (+ y h)))
  (gl-vertex x (- (+ y h)))
- (gl-end))
+ (gl-end))]
 
+Draws a rectangle at @racket[(x y)] with width @racket[w] and height @racket[h], in absolute coordinates.  Uses the rgb values specified in the 3-list @racket[color].
+
+Runs in constant time.
+
+@chunk[<def-draw-text>
 (define (draw-text text x y clr)
  (gl-color (/ (car clr) 255) (/ (cadr clr) 255) (/ (caddr clr) 255))
  (gl-raster-pos (- 1 Scroll-offset-x) (- Scroll-offset-y 1))
  (glBitmap 0 0 0 0 (+ x Scroll-offset-x) (- (+ y Scroll-offset-y)) (make-cvector _byte 1))
- (ftglRenderFont Font text 65535))
-]
+ (ftglRenderFont Font text 65535))]
+
+Draws text at @racket[(x y)], in relative coordinates.  Uses the rgb values specified in the 3-list @racket[color].
+
+Runs in constant time (I believe; it may run in linear time relative to the length of the text).
 
 @subsection{Selection functions}
 
-@chunk[<selection-functions>
+@chunk[<def-go>
 (define (go dir)
  (let ((new-sel (apply find-utterance Utterance-tree
 		 (cond
@@ -621,8 +643,13 @@ The font used for all text.  Two things are important:  the type of font, and th
 		   (list (+ (ess-utterance-x Selection) (ess-utterance-w Selection) 1) (ess-utterance-y Selection)))))))
  (select (if new-sel new-sel Selection)))
  (generate-utterance-tree ARGS)
- (send Thecanvas on-paint))
+ (send Thecanvas on-paint))]
 
+Changes the selection in the direction of @racket[dir], which may be one of @racket['left], @racket['down], @racket['up], and @racket['right].  Calls @racket[select] to actually set the variable.  Regenerates the utterance tree.
+
+Runs in the computational complexity of @racket[generate-utterance-tree].
+
+@chunk[<def-open-u>
 (define (open-u u deep?)
  (set! Open (set-union Open (list->set
 			     (if deep?
@@ -634,8 +661,13 @@ The font used for all text.  Two things are important:  the type of font, and th
 				       (lam (flatten (map ess-addr-args l)))))))
 			       (lam (list (ess-utterance-addr u))))))))
   (generate-utterance-tree ARGS)
-  (send Thecanvas on-paint))
+  (send Thecanvas on-paint))]
 
+Opens the ess-utterance.  If @racket[deep?], then opens all descendants down to the next code level.  If not @racket[deep?], its immediate children are opened.  If these are already open, then the next level is opened, etc.  This was particularly late night coding -- don't ask me how the code works.  Regenerates the utterance tree.
+
+Runs in the computational complexity of @racket[generate-utterance-tree] except in cases where very large ess-utterances are being opened, when it may run in linear time relative to the number of already-open descendants (although I suspect it is always dominated by @racket[generate-utterance-tree]).
+
+@chunk[<def-close-u>
 (define (close-u u deep?)
  (set! Open (set-subtract Open (list->set
 				(if deep?
@@ -655,8 +687,13 @@ The font used for all text.  Two things are important:  the type of font, and th
 					   (lam (flatten (map ess-addr-args l)))))))
 				   (lam (list (ess-utterance-addr u)))))))))
  (generate-utterance-tree ARGS)
- (send Thecanvas on-paint))
+ (send Thecanvas on-paint))]
 
+Closes the ess-utterance.  If @racket[deep?], then closes all descendants.  If not @racket[deep?], then close only the deepest layer.  In either case, if all descendants are already closed, then closes the parent and selects the parent.  Regenerates the utterance tree.
+
+Runs in the computational complexity of @racket[generate-utterance-tree] except in cases where very large ess-utterances are being closed, when it may run in linear time relative to the number of already-open descendants (although I suspect it is always dominated by @racket[generate-utterance-tree]).
+
+@chunk[<def-select>
 (define (select u)
  (set! Selection u)
  (let ((x (+ Scroll-offset-x (ess-utterance-x u)))
@@ -676,8 +713,11 @@ The font used for all text.  Two things are important:  the type of font, and th
     (> y (/ HEIGHT Zoom-factor)))
    (let ((c (+ (ess-utterance-y u) (/ h 2))))
     (set! Scroll-offset-y (- (+ c (- (/ HEIGHT Zoom-factor 2))))))
-   '())))
-]
+   '())))]
+
+Selects the ess-utterance.  Sets @racket[Selection] to the ess-utterance, and if invisible, then centers viewport onto the new selection.  Does @emph{not} regenerate the utterance tree -- this must be done by the caller, or else the change will not be visible.
+
+Runs in constant time.
 
 @subsection{Dimensions functions}
 
