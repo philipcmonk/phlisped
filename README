@@ -30,5 +30,7 @@ Make zoom-out emphasize function names and use minor dimension space more effici
 
 Some kind of sidebar
 
+Only actually draw box (and text) if the box is visible -- not just if its children may be visible.  Not worth it?
+
 Write
 

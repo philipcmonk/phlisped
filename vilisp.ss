@@ -21,7 +21,7 @@ The internals are fairly simple, conceptually.  Briefly, we read Racket code as 
 <def-vertical> <def-width/height> <def-colors> <def-cellheight> <def-scrolldist> <def-filename> <def-roles>]
 
 @chunk[<global-variables>
-<def-args> <def-utterance-tree> <def-open> <def-selection> <def-scroll-offset> <def-mouse-pos> <def-zoom-factor> <def-font>]
+<def-args> <def-utterance-tree> <def-open> <def-main-dim> <def-info> <def-info-dim> <def-selection> <def-scroll-offset> <def-mouse-pos> <def-zoom-factor> <def-font>]
 
 @chunk[<define-functions>
 <struct/class-declarations>
@@ -38,13 +38,13 @@ The internals are fairly simple, conceptually.  Briefly, we read Racket code as 
 <def-list->ess-expr> <def-ess-expr->ess-man> <def-ess-man->ess-addr> <def-ess-addr->ess-utterance>]
 
 @chunk[<paint-functions>
-<def-ess-utterance-paint> <def-draw-rectangle> <def-draw-text>]
+<def-ess-utterance-paint> <def-paint-info> <def-draw-rectangle> <def-draw-text>]
 
 @chunk[<selection-functions>
 <def-go> <def-open-u> <def-close-u> <def-select>]
 
 @chunk[<utility-functions>
-<def-border> <def-get-color> <def-center> <def-ess-addr-deep-args> <def-ess-utterance-parent> <def-maj/min/span-dimensions>
+<def-border> <def-get-color> <def-center> <def-ess-addr-deep-args> <def-ess-expr-code> <def-ess-utterance-parent> <def-maj/min/span-dimensions> <def-rel->gl>
 <def-get-role> <def-invisible> <def-ess-addr-args> <def-find-addr-from-laddr> <def-open?/closed?> <def-generate-utterance-tree> <def-find-utterance-from-laddr> <def-find-utterance>]
 
 @section{Require libraries}
@@ -83,7 +83,7 @@ Below we define the data structures and functions relating to the storage of the
 @subsection{Global variables}
 
 @chunk[<def-filename>
-(define FILENAME "vilisp.ss")]
+(define FILENAME "/home/philip/vilisp/vilisp/vilisp.ss")]
 
 The file to be parsed.
 
@@ -205,20 +205,20 @@ The ess-utterance tree is finite and eagerly evaluated.
  (apply
   ess-expr
   (cond
-   ((symbol? l) (list (symbol->string l) '() 'symbol))
-   ((string? l) (list l '() 'string))
-   ((number? l) (list (number->string l) '() 'number))
+   ((symbol? l) (list (format "~s" l) '() 'symbol))
+   ((string? l) (list (format "~s" l) '() 'string))
+   ((number? l) (list (format "~s" l) '() 'number))
    ((null? l) (list "null" '() 'null))
    ((list? l)
     (list
      (ess-expr-name (list->ess-expr (car l)))
      (map list->ess-expr l)
      (if (symbol? (car l)) (car l) 'list)))
-   (#t (list "--" '() 'unknown)))))]
+   (#t (list (format "~s" l) '() 'unknown)))))]
 
 Converts a list of code into ess-expressions.  See @racket[ess-expr]
 
-If @racket[l] is not a list, then we try to convert it into a string and store it in @racket[name].  Currently supported are symbols, strings, numbers, and null.  If it is a list, then we recursively create an ess-expression of the first argument and use its name.  If we don't recoginze the type, then we use @racket["--"].
+If @racket[l] is not a list, then we try to convert it into a string and store it in @racket[name].  Currently supported are symbols, strings, numbers, and null.  If it is a list, then we recursively create an ess-expression of the first argument and use its name.  If we don't recoginze the type, then we use @racket[format] to convert it to a string type.
 
 If @racket[l] is not a list, then @racket[args] is null.  Else, @racket[args] is the recursive map of the elements of @racket[l].
 
@@ -373,6 +373,12 @@ Runs, technically, in amortized linear time relative to the number of descendant
 
 Note that this references @racket[ess-addr-args], so if these have not yet been generated, they will be generated.
 
+@chunk[<def-ess-expr-code>
+(define (ess-expr-code expr)
+ (if (member (ess-expr-type expr) '(string symbol number unknown))
+  (ess-expr-name expr)
+  (string-append "(" (if (eq? (ess-expr-type expr) 'list) (ess-expr-name expr) "") (string-join (map ess-expr-code (ess-expr-args expr)) " ") ")")))]
+
 @chunk[<def-get-role>
 (define (get-role type n)
  (if (hash-has-key? Roles type)
@@ -457,6 +463,7 @@ Defines the default width and height of the window.
 (define CODECOLOR2 (cons '(255 255 255) '(223 0 0)))
 (define CODECOLOR3 (cons '(255 255 255) '(191 0 0)))
 (define SELCOLOR (cons '(128 0 128) '(0 191 0)))
+(define INFOCOLOR (cons '(255 255 255) '(0 0 0)))
 (define BGCOLOR "black")
 (define INITIALCOLOR '(0 0 127))
 (define COLORRANGES '(127 0 -127))
@@ -490,6 +497,8 @@ For the alternate color scheme, we have the following logic to determine the col
 
 @racket[SELCOLOR] is the color used for coloring the selected cell in either mode.
 
+@racket[INFOCOLOR] is the color of the sidebar on the bottom.
+
 @racket[BGCOLOR] is the background color (i.e. the color of everything not part of the tree) in either mode.
 
 I honestly have no idea what @racket[FGCOLOR] is supposed to do, but it seems to be related to the gradient mode.
@@ -503,6 +512,21 @@ The height of a cell (in absolute coordinates) in horizontal mode.  We don't jus
 (define Open (set))]
 
 The set of open @racket[ess-addr]s.  If an @racket[ess-addr] is listed here, then its children are visible (i.e. are part of @racket[Utterance-tree]).  See @racket[open?] and @racket[closed?].
+
+@chunk[<def-main-dim>
+(define Main-dim (list 0 0 WIDTH (- HEIGHT 30)))]
+
+The x,y,w,h (in relative coordinates) of the main viewing area.
+
+@chunk[<def-info-dim>
+(define Info-dim (list 0 (- HEIGHT 30) WIDTH 30))]
+
+The x,y,w,h (in relative coordinates) of the info sidebar.  Defaults to the bottom 30 pixels.
+
+@chunk[<def-info>
+(define Info "test")]
+
+The text to be displayed in the info sidebar.
 
 @chunk[<def-selection>
 (define Selection (ess-utterance ARGS 0 0 0 0 0 0 '() #f))]
@@ -567,7 +591,11 @@ The racket side of the openGL canvas.  Handles painting and mouse/keyboard input
      (gl-matrix-mode 'modelview)
      (gl-load-identity)
 
+     (gl-enable 'scissor-test)
+     (apply gl-scissor (rel->gl Main-dim))
      (ess-utterance-paint Utterance-tree)
+     (gl-disable 'scissor-test)
+     (paint-info Info #f)
      (swap-gl-buffers))))]
 
 Resets the openGL buffer, sets the view, and calls @racket[ess-utterance-paint] with @racket[Utterance-tree].
@@ -601,6 +629,28 @@ Checks if an ess-utterance is visible, and if so, paints it and recursively maps
 
 Runs in linear time (with a fairly high constant) relative to the number of visible ess-utterances (which may be very large if zoomed out far).
 
+@chunk[<def-paint-info>
+(define (paint-info text swap)
+ (if swap
+  (begin
+   (gl-enable 'scissor-test)
+   (apply gl-scissor (rel->gl Info-dim))
+   (gl-clear 'color-buffer-bit))
+  '())
+ (gl-color (/ (car (car INFOCOLOR)) 255) (/ (cadr (car INFOCOLOR)) 255) (/ (caddr (car INFOCOLOR)) 255))
+ (gl-raster-pos (- 1 Scroll-offset-x) (- Scroll-offset-y 1))
+ (glBitmap 0 0 0 0 (car Info-dim) (- 7 (+ (cadddr Info-dim) (cadr Info-dim))) (make-cvector _byte 1))
+ (ftglRenderFont Font (substring text 0 (min (string-length text) 120)) 65535)
+ (if swap
+  (begin 
+   (send Thecanvas swap-gl-buffers)
+   (gl-disable 'scissor-test))
+  '()))]
+
+Paints information into the display at the bottom of the screen.  Usually, this is used for displaying the code of the hovered-over utterance.
+
+Runs in constant time (I believe; it may run in linear time relative to the length of the text).
+
 @chunk[<def-draw-rectangle>
 (define (draw-rectangle clr x y w h)
  (gl-color (/ (car clr) 255) (/ (cadr clr) 255) (/ (caddr clr) 255))
@@ -623,7 +673,7 @@ Runs in constant time.
  (glBitmap 0 0 0 0 (+ x Scroll-offset-x) (- (+ y Scroll-offset-y)) (make-cvector _byte 1))
  (ftglRenderFont Font text 65535))]
 
-Draws text at @racket[(x y)], in relative coordinates.  Uses the rgb values specified in the 3-list @racket[color].
+Draws text at @racket[(x y)], in absolute coordinates.  Uses the rgb values specified in the 3-list @racket[color].
 
 Runs in constant time (I believe; it may run in linear time relative to the length of the text).
 
@@ -830,6 +880,14 @@ Returns the value in a particular dimension, as defined by @racket{VERTICAL}.
 
 Runs in constant time.
 
+@chunk[<def-rel->gl>
+(define (rel->gl l)
+ (list (car l) (- HEIGHT (+ (cadddr l) (cadr l))) (caddr l) (cadddr l)))]
+
+Converts relative coordintes into OpenGL relative coordinates (deals with y-dimension weirdness).
+
+Runs in constant time.
+
 @chunk[<def-invisible>
 (define (invisible x y w h)
  (or
@@ -916,6 +974,10 @@ This is the hash for @racket[define-mouse-handler].  Keys are symbols and values
 	(set! Scroll-offset-y (+ Scroll-offset-y (/ (+ (- (cdr Mouse-pos)) rel-y) Zoom-factor)))
 	(set! Mouse-pos (cons rel-x rel-y))
 	(send this on-paint)))))
+    ((eq? (send event get-event-type) 'motion)
+     (define-mouse-handler (clicked)
+      (set! Info (ess-expr-code (ess-man-expr (ess-addr-man (ess-utterance-addr clicked)))))
+      (paint-info Info #t)))
     ((eq? (send event get-event-type) 'left-down)
      (define-mouse-handler (rel-x rel-y)
       (set! Mouse-pos (cons rel-x rel-y))))
