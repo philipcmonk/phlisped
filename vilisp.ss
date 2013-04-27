@@ -35,7 +35,7 @@ The internals are fairly simple, conceptually.  Briefly, we read Racket code as 
 <def-ess-expr> <def-ess-man> <def-ess-addr> <def-ess-utterance> <def-my-canvas> <def-win> <def-thecanvas>]
 
 @chunk[<conversion-functions>
-<def-list->ess-expr> <def-ess-expr->ess-man> <def-ess-man->ess-addr> <def-ess-addr->ess-utterance>]
+<def-list->ess-expr> <def-ess-expr->ess-man> <def-ess-man->ess-addr> <def-ess-addr->ess-utterance> <def-cmds>]
 
 @chunk[<paint-functions>
 <def-ess-utterance-paint> <def-paint-info> <def-draw-rectangle> <def-draw-text>]
@@ -378,6 +378,10 @@ Note that this references @racket[ess-addr-args], so if these have not yet been 
  (if (member (ess-expr-type expr) '(string symbol number unknown))
   (ess-expr-name expr)
   (string-append "(" (if (eq? (ess-expr-type expr) 'list) (ess-expr-name expr) "") (string-join (map ess-expr-code (ess-expr-args expr)) " ") ")")))]
+
+Gets a string representation of the code of an ess-expression.
+
+Runs in linear time relative to the number of descendants of the ess-expression.
 
 @chunk[<def-get-role>
 (define (get-role type n)
@@ -923,6 +927,53 @@ Runs in constant time.
      (find-utterance child x y)
      #f))
    (ess-utterance-args root))))]
+
+@subsection{newstuff}
+
+@chunk[<def-cmds>
+(define cmds (hash))
+
+(define-syntax (def-cmd stx)
+ (let* ((l (syntax->datum stx))
+	(name (cadr l))
+	(width-in? (caddr l))
+	(body (cdddr l)))
+  (datum->syntax stx `(set! cmds (hash-set cmds ,name (lambda (args) ,@body))))))
+
+(def-cmd 'chunk #t (string-append "code:  " (format "~s" args) "\n"))
+(def-cmd 'section #f (string-append "section:  " (format "~s" args) "\n"))
+(def-cmd 'subsection #f (string-append "subsection:  " (format "~s" args) "\n"))
+(def-cmd 'itemize #t (string-append "itemize:  " (format "~s" args) "\n"))
+(def-cmd 'text #f (string-append "text:  " (format "~s" args) "\n"))
+(def-cmd 'unknown #f (string-append "unknown:  " (format "~s" args) "\n"))
+
+(define (list->words l)
+ (map
+  (lambda (itm)
+   (cond
+    ((string? itm)
+     ((hash-ref cmds 'text) itm))
+    ((and (list? itm) (hash-has-key? cmds (car itm)))
+     ((hash-ref cmds (car itm)) itm))
+    (#t
+     ((hash-ref cmds 'unknown) itm))))
+  l))
+
+(map
+ (lambda (line) (display line))
+ (list->words
+  (cdddar
+   (cdddar
+    (call-with-input-file FILENAME
+     (lambda (f)
+      (read-accept-reader #t)
+      (define (in rem)
+       (let ((x (read rem)))
+	(if (eof-object? x)
+	 '(end)
+	 (cons x (in rem)))))
+      (in f)))))))
+]
 
 @section{Input}
 
