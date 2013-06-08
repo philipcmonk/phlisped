@@ -21,7 +21,7 @@ The internals are fairly simple, conceptually.  Briefly, we read Racket code as 
 <def-vertical> <def-width/height> <def-colors> <def-cellheight> <def-scrolldist> <def-filename> <def-roles>]
 
 @chunk[<global-variables>
-<def-args> <def-utterance-tree> <def-open> <def-main-dim> <def-info> <def-info-dim> <def-selection> <def-scroll-offset> <def-mouse-pos> <def-zoom-factor> <def-font>]
+<def-args> <def-utterance-tree> <def-open> <def-main-dim> <def-info> <def-info-dim> <def-selection> <def-scroll-offset> <def-mouse-pos> <def-zoom-factor> <def-font> <def-cmds>]
 
 @chunk[<define-functions>
 <struct/class-declarations>
@@ -35,7 +35,7 @@ The internals are fairly simple, conceptually.  Briefly, we read Racket code as 
 <def-ess-expr> <def-ess-man> <def-ess-addr> <def-ess-utterance> <def-my-canvas> <def-win> <def-thecanvas>]
 
 @chunk[<conversion-functions>
-<def-list->ess-expr> <def-ess-expr->ess-man> <def-ess-man->ess-addr> <def-ess-addr->ess-utterance> <def-cmds>]
+<def-list->ess-expr> <def-ess-expr->ess-man> <def-ess-man->ess-addr> <def-ess-addr->ess-utterance>]
 
 @chunk[<paint-functions>
 <def-ess-utterance-paint> <def-paint-info> <def-draw-rectangle> <def-draw-text>]
@@ -83,7 +83,7 @@ Below we define the data structures and functions relating to the storage of the
 @subsection{Global variables}
 
 @chunk[<def-filename>
-(define FILENAME "/home/philip/vilisp/vilisp/vilisp.ss")]
+(define FILENAME "/home/philip/olddesktop/vilisp/vilisp/vilisp.ss")]
 
 The file to be parsed.
 
@@ -549,7 +549,8 @@ The scroll offsets, in absolute coordinates.  If the offsets for x and y are a a
 The zoom-factor, i.e. the ratio of change in relative coordinates to change in absolute coordinates.  Thus, if it is 1/2, then we are zoomed out so that everything is half as tall and half as wide.
 
 @chunk[<def-font>
-(define Font (ftglCreateBitmapFont "/home/philip/vilisp/VeraMono.ttf")) ]
+(define Font (ftglCreateBitmapFont "/home/philip/olddesktop/vilisp/VeraMono.ttf"))
+(ftglSetFontFaceSize Font 24 72)]
 
 The font used for all text.  Two things are important:  the type of font, and the font itself.  The font file is a truetype font file.  The type of font is one of those allowed by FTGL.  We use Bitmap since it seems to have the best performance.  Pixmap is  a little slower but is a better rendering.  The others do not seem to work as-is.
 
@@ -597,7 +598,8 @@ The racket side of the openGL canvas.  Handles painting and mouse/keyboard input
 
      (gl-enable 'scissor-test)
      (apply gl-scissor (rel->gl Main-dim))
-     (ess-utterance-paint Utterance-tree)
+;     (ess-utterance-paint Utterance-tree)
+     (word-paint WORDS 0 100 0 100 WIDTH HEIGHT)
      (gl-disable 'scissor-test)
      (paint-info Info #f)
      (swap-gl-buffers))))]
@@ -643,7 +645,7 @@ Runs in linear time (with a fairly high constant) relative to the number of visi
   '())
  (gl-color (/ (car (car INFOCOLOR)) 255) (/ (cadr (car INFOCOLOR)) 255) (/ (caddr (car INFOCOLOR)) 255))
  (gl-raster-pos (- 1 Scroll-offset-x) (- Scroll-offset-y 1))
- (glBitmap 0 0 0 0 (car Info-dim) (- 7 (+ (cadddr Info-dim) (cadr Info-dim))) (make-cvector _byte 1))
+ (glBitmap 0 0 0 0 (car Info-dim) (- 7 (+ (cadddr Info-dim) (cadr Info-dim))) (make-cvector _uint8 1))
  (ftglRenderFont Font (substring text 0 (min (string-length text) 120)) 65535)
  (if swap
   (begin 
@@ -674,7 +676,7 @@ Runs in constant time.
 (define (draw-text text x y clr)
  (gl-color (/ (car clr) 255) (/ (cadr clr) 255) (/ (caddr clr) 255))
  (gl-raster-pos (- 1 Scroll-offset-x) (- Scroll-offset-y 1))
- (glBitmap 0 0 0 0 (+ x Scroll-offset-x) (- (+ y Scroll-offset-y)) (make-cvector _byte 1))
+ (glBitmap 0 0 0 0 (+ x Scroll-offset-x) (- (+ y Scroll-offset-y)) (make-cvector _uint8 1))
  (ftglRenderFont Font text 65535))]
 
 Draws text at @racket[(x y)], in absolute coordinates.  Uses the rgb values specified in the 3-list @racket[color].
@@ -933,34 +935,92 @@ Runs in constant time.
 @chunk[<def-cmds>
 (define cmds (hash))
 
-(define-syntax (def-cmd stx)
+(struct win-word (paint))
+(struct wout-word (paint w))
+
+(define-syntax (def-wout-cmd stx)
  (let* ((l (syntax->datum stx))
 	(name (cadr l))
-	(width-in? (caddr l))
-	(body (cdddr l)))
-  (datum->syntax stx `(set! cmds (hash-set cmds ,name (lambda (args) ,@body))))))
+	(body (cddr l)))
+   (datum->syntax stx `(set! cmds (hash-set cmds ,name (lambda (args) ,@body))))))
 
-(def-cmd 'chunk #t (string-append "code:  " (format "~s" args) "\n"))
-(def-cmd 'section #f (string-append "section:  " (format "~s" args) "\n"))
-(def-cmd 'subsection #f (string-append "subsection:  " (format "~s" args) "\n"))
-(def-cmd 'itemize #t (string-append "itemize:  " (format "~s" args) "\n"))
-(def-cmd 'text #f (string-append "text:  " (format "~s" args) "\n"))
-(def-cmd 'unknown #f (string-append "unknown:  " (format "~s" args) "\n"))
+(define-syntax (def-win-cmd stx)
+ (let* ((l (syntax->datum stx))
+	(name (cadr l))
+	(body (cddr l)))
+   (datum->syntax stx `(set! cmds (hash-set cmds ,name (lambda (args) (win-word (lambda (x y w) ,@body))))))))
+
+(def-win-cmd 'chunk
+ (ess-utterance-paint 
+  (ess-addr->ess-utterance
+   (ess-man->ess-addr
+    (ess-expr->ess-man
+     (list->ess-expr args)
+     'root
+     '()
+     (hash))
+    (list))
+   x y w 0 1)))
+
+; (draw-text (string-append "code:  " (format "~s" args) "\n") x y (car INFOCOLOR)))
+
+(def-wout-cmd 'section
+ (map 
+  (lambda (n)
+   (let ((text (format "~s" args)))
+    (wout-word
+     (lambda (x y)
+      (draw-text text x y (car INFOCOLOR)))
+     (box-width text))))
+  '(1 2 3 4 5)))
+
+(def-wout-cmd 'subsection
+ (map 
+  (lambda (n)
+   (let ((text (format "~s" args)))
+    (wout-word
+     (lambda (x y)
+      (draw-text text x y (car INFOCOLOR)))
+     (box-width text))))
+  '(1 2 3)))
+
+(def-win-cmd 'itemize
+ (draw-text (string-append "itemize:  " (format "~s" args) "\n") x y (car INFOCOLOR)))
+
+(def-wout-cmd 'text
+ (map 
+  (lambda (arg)
+   (wout-word
+    (lambda (x y)
+     (draw-text arg x y (car INFOCOLOR)))
+    (+ 10 (box-width arg))))
+  (regexp-split #px" " (format "~s" args))))
+
+(def-wout-cmd 'unknown
+ (map 
+  (lambda (n)
+   (let ((text (string-append "unknown:  " (format "~s" args) "\n")))
+    (wout-word
+     (lambda (x y)
+      (draw-text text x y (car INFOCOLOR)))
+     (box-width text))))
+  '(1)))
+
 
 (define (list->words l)
- (map
-  (lambda (itm)
-   (cond
-    ((string? itm)
-     ((hash-ref cmds 'text) itm))
-    ((and (list? itm) (hash-has-key? cmds (car itm)))
-     ((hash-ref cmds (car itm)) itm))
-    (#t
-     ((hash-ref cmds 'unknown) itm))))
-  l))
+ (flatten
+  (map
+   (lambda (itm)
+    (cond
+     ((string? itm)
+      ((hash-ref cmds 'text) itm))
+     ((and (list? itm) (hash-has-key? cmds (car itm)))
+      ((hash-ref cmds (car itm)) itm))
+     (#t
+      ((hash-ref cmds 'unknown) itm))))
+   l)))
 
-(map
- (lambda (line) (display line))
+(define WORDS 
  (list->words
   (cdddar
    (cdddar
@@ -973,6 +1033,25 @@ Runs in constant time.
 	 '(end)
 	 (cons x (in rem)))))
       (in f)))))))
+
+(define (fork op a b)
+ (cons (op (car a) (car b)) (op (cdr a) (cdr b))))
+
+(define (word-paint words x y cx cy w h)
+ (let ((word (car words)))
+  (if (> cy h)
+   (cons cx cy)
+    (if (win-word? word)
+     (begin
+      ((win-word-paint word) x (+ 30 cy) w)
+      (word-paint (cdr words) x y x (+ 60 cy) w h))
+     (if (> (+ cx (wout-word-w word)) w)
+      (let ((xx x) (yy (+ 30 cy)))
+       ((wout-word-paint word) xx yy)
+       (word-paint (cdr words) x y (+ xx (wout-word-w word)) yy w h))
+      (let ((xx cx) (yy cy))
+       ((wout-word-paint word) xx yy)
+       (word-paint (cdr words) x y (+ xx (wout-word-w word)) yy w h)))))))
 ]
 
 @section{Input}
@@ -1101,7 +1180,6 @@ This is the hash for @racket[define-mouse-handler].  Keys are symbols and values
 Enough talk.
 
 @chunk[<call-functions>
-(ftglSetFontFaceSize Font 24 72)
 (generate-utterance-tree ARGS)
 (send win show #t)
 ]
