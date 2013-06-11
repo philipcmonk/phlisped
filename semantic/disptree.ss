@@ -56,7 +56,7 @@ We import the racket/gui library for creating the window and managing the input.
 (require (only-in racket/gui (yield yield-gui) (-> ->-gui)))
 (require sgl sgl/gl)
 
-(provide Thecanvas display-on-screen paintit)
+(provide Thecanvas display-on-screen Tree1 Tree2 Info paint-info)
 
 (require ffi/unsafe ffi/unsafe/define ffi/unsafe/cvector)
 
@@ -93,8 +93,14 @@ The file to be parsed.
 (define Tree1
  (apply whole-tree 
   (let* ((dummy-addr (ess-addr "" '() (delay '())))
-         (dummy-utterance (ess-utterance dummy-addr 0 0 0 0 0 0 '() '((0 0 0) (0 0 0)))))
+         (dummy-utterance (ess-utterance dummy-addr 0 0 0 0 0 0 '() (cons '(0 0 0) '(0 0 0)))))
    (list dummy-addr (lambda (a) '()) dummy-utterance (set) dummy-utterance))))
+(define Tree2
+ (apply whole-tree 
+  (let* ((dummy-addr (ess-addr "" '() (delay '())))
+         (dummy-utterance (ess-utterance dummy-addr (/ (* 2 WIDTH) 3) 0 0 0 0 0 '() (cons '(0 0 0) '(0 0 0)))))
+   (list dummy-addr (lambda (a) '()) dummy-utterance (set) dummy-utterance))))
+(define Selected-tree Tree1)
 (define Utterance-tree #f)]
 
 The utterance tree.  This regenerates often (see @racket[generate-utterance-tree]).
@@ -317,24 +323,25 @@ We recursively, but lazily, convert each of the children of @racket[man].  Alter
 Runs in constant time (remember that it does not eagerly generate children).
 
 @chunk[<def-ess-addr->ess-utterance>
-(define (ess-addr->ess-utterance addr x y w row siblings)
+(define (ess-addr->ess-utterance addr x y w row siblings tree)
  (let ((children 
-	(if (closed? addr)
+	(if (closed? addr tree)
 	 '()
-	 (let ((child-w (if VERTICAL (foldl max 0 (map (lambda (arg) (ess-addr-width arg)) (ess-addr-args addr))) -1)))
+	 (let ((child-w (if VERTICAL (foldl max 0 (map (lambda (arg) (ess-addr-width arg tree)) (ess-addr-args addr))) -1)))
 	  (caddr
 	   (foldl
 	    (lambda (arg data)
 	     (let ((res (ess-addr->ess-utterance
 			 arg
 			 (if VERTICAL (+ (car data) w) (car data))
-			 (if VERTICAL (cadr data) (+ (cadr data) (ess-addr-height arg)))
+			 (if VERTICAL (cadr data) (+ (cadr data) (ess-addr-height arg tree)))
 			 child-w
 			 (+ 1 row)
-			 (- (length (ess-addr-args addr)) 1))))
+			 (- (length (ess-addr-args addr)) 1)
+                         tree)))
 	      (list
 	       (if VERTICAL (car data) (+ (car data) (ess-utterance-w res)))
-	       (if VERTICAL (+ (cadr data) (ess-addr-height arg)) (cadr data))
+	       (if VERTICAL (+ (cadr data) (ess-addr-height arg tree)) (cadr data))
 	       (if (null? res)
 		(caddr data)
 		(append
@@ -347,7 +354,7 @@ Runs in constant time (remember that it does not eagerly generate children).
    x
    y
    (if VERTICAL w (max (box-width (ess-man-text (ess-addr-man addr))) (apply + (map ess-utterance-w children))))
-   (ess-addr-height addr)
+   (ess-addr-height addr tree)
    (box-width (ess-man-text (ess-addr-man addr)))
    (box-height (ess-man-text (ess-addr-man addr)))
    children
@@ -432,11 +439,11 @@ Runs in linear time relative to the length of @racket[laddr].
   (find-utterance-from-laddr (list-ref (ess-utterance-args tree) (car laddr)) (cdr laddr))))]
 
 @chunk[<def-ess-utterance-parent>
-(define (ess-utterance-parent u)
- (apply find-utterance (whole-tree-utterance-tree Tree1)
+(define (ess-utterance-parent u tree)
+ (apply find-utterance (whole-tree-utterance-tree tree)
   (if VERTICAL
-   (list (+ (ess-utterance-x u) -1) (ess-utterance-y u))
-   (list (ess-utterance-x u) (+ (ess-utterance-y u) -1)))))]
+   (list (+ (ess-utterance-x u) -1) (ess-utterance-y u) tree)
+   (list (ess-utterance-x u) (+ (ess-utterance-y u) -1) tree))))]
 
 Returns the parent of @racket[u].
 
@@ -446,7 +453,7 @@ Runs in the same complexity class as find-utterance, which is worst-case linear,
 
 @chunk[<def-generate-utterance-tree>
 (define (generate-utterance-tree tree)
-    (set-whole-tree-utterance-tree! tree (ess-addr->ess-utterance (whole-tree-addr-tree tree) 0 0 (if VERTICAL (ess-addr-width (whole-tree-addr-tree tree)) -1) 0 1))
+    (set-whole-tree-utterance-tree! tree (ess-addr->ess-utterance (whole-tree-addr-tree tree) (ess-utterance-x (whole-tree-utterance-tree tree)) (ess-utterance-y (whole-tree-utterance-tree tree)) (if VERTICAL (ess-addr-width (whole-tree-addr-tree tree) tree) -1) 0 1 tree))
     (set-whole-tree-selection! tree (find-utterance-from-laddr (whole-tree-utterance-tree tree) (ess-addr-laddr (ess-utterance-addr (whole-tree-selection tree))))))]
 
 Regenerates the utterance tree from @racket[addr].
@@ -537,7 +544,8 @@ The height of a cell (in absolute coordinates) in horizontal mode.  We don't jus
 The set of open @racket[ess-addr]s.  If an @racket[ess-addr] is listed here, then its children are visible (i.e. are part of @racket[Utterance-tree]).  See @racket[open?] and @racket[closed?].
 
 @chunk[<def-main-dim>
-(define Main-dim (list 0 0 WIDTH (- HEIGHT 30)))]
+(define Main-dim (list 0 0 (round (/ (* 2 WIDTH) 3)) (- HEIGHT 30)))
+(define Side-dim (list (round (/ (* 2 WIDTH) 3)) 0 (round (/ WIDTH 3)) (- HEIGHT 30)))]
 
 The x,y,w,h (in relative coordinates) of the main viewing area.
 
@@ -622,6 +630,8 @@ The racket side of the openGL canvas.  Handles painting and mouse/keyboard input
      (ess-utterance-paint (whole-tree-utterance-tree Tree1))
 ;     (paintit)
 ;     (word-paint WORDS 0 100 0 100 WIDTH HEIGHT)
+     (apply gl-scissor (rel->gl Side-dim))
+     (ess-utterance-paint (whole-tree-utterance-tree Tree2))
      (gl-disable 'scissor-test)
      (paint-info Info #f)
      (swap-gl-buffers))))]
@@ -633,11 +643,11 @@ Runs in the computational complexity of @racket[ess-utterance-paint].
 @chunk[<def-ess-utterance-paint> 
 (define paintit (lambda () '()))
 
-(define (display-on-screen x y w h root childfunc)
- (set-whole-tree-addr-tree! Tree1 (root->ess-addr root childfunc '()))
- (set-whole-tree-selection! Tree1 (ess-utterance (whole-tree-addr-tree Tree1) 0 0 0 0 0 0 '() #f))
- (set-whole-tree-utterance-tree! Tree1 (ess-addr->ess-utterance (whole-tree-addr-tree Tree1) x y w 0 '()))
- (set-whole-tree-childfunc! Tree1 childfunc))
+(define (display-on-screen tree x y w h root childfunc)
+ (set-whole-tree-addr-tree! tree (root->ess-addr root childfunc '()))
+ (set-whole-tree-selection! tree (ess-utterance (whole-tree-addr-tree tree) 0 0 0 0 0 0 '() #f))
+ (set-whole-tree-utterance-tree! tree (ess-addr->ess-utterance (whole-tree-addr-tree tree) x y w 0 '() tree))
+ (set-whole-tree-childfunc! tree childfunc))
 ; (set! ARGS (whole-tree-addr-tree Tree1))
 ; (set! paintit
 ;  (lambda () (ess-utterance-paint Utterance-tree))))
@@ -743,19 +753,19 @@ Runs in constant time (I believe; it may run in linear time relative to the leng
 @subsection{Selection functions}
 
 @chunk[<def-go>
-(define (go dir)
- (let ((new-sel (apply find-utterance (whole-tree-utterance-tree Tree1)
+(define (go dir tree)
+ (let ((new-sel (apply find-utterance (whole-tree-utterance-tree tree)
 		 (cond
 		  ((eq? dir 'left)
-		   (list (+ (ess-utterance-x (whole-tree-selection Tree1)) -1) (ess-utterance-y (whole-tree-selection Tree1))))
+		   (list (+ (ess-utterance-x (whole-tree-selection tree)) -1) (ess-utterance-y (whole-tree-selection tree)) tree))
 		  ((eq? dir 'down)
-		   (list (ess-utterance-x (whole-tree-selection Tree1)) (+ (ess-utterance-y (whole-tree-selection Tree1)) (ess-utterance-h (whole-tree-selection Tree1)) 1)))
+		   (list (ess-utterance-x (whole-tree-selection tree)) (+ (ess-utterance-y (whole-tree-selection tree)) (ess-utterance-h (whole-tree-selection tree)) 1) tree))
 		  ((eq? dir 'up)
-		   (list (ess-utterance-x (whole-tree-selection Tree1)) (+ (ess-utterance-y (whole-tree-selection Tree1)) -1)))
+		   (list (ess-utterance-x (whole-tree-selection tree)) (+ (ess-utterance-y (whole-tree-selection tree)) -1) tree))
 		  ((eq? dir 'right)
-		   (list (+ (ess-utterance-x (whole-tree-selection Tree1)) (ess-utterance-w (whole-tree-selection Tree1)) 1) (ess-utterance-y (whole-tree-selection Tree1))))))))
- (select (if new-sel new-sel (whole-tree-selection Tree1))))
- (generate-utterance-tree Tree1)
+		   (list (+ (ess-utterance-x (whole-tree-selection tree)) (ess-utterance-w (whole-tree-selection tree)) 1) (ess-utterance-y (whole-tree-selection tree)) tree))))))
+ (select (if new-sel new-sel (whole-tree-selection tree))))
+ (generate-utterance-tree tree)
  (send Thecanvas on-paint))]
 
 Changes the selection in the direction of @racket[dir], which may be one of @racket['left], @racket['down], @racket['up], and @racket['right].  Calls @racket[select] to actually set the variable.  Regenerates the utterance tree.
@@ -763,19 +773,19 @@ Changes the selection in the direction of @racket[dir], which may be one of @rac
 Runs in the computational complexity of @racket[generate-utterance-tree].
 
 @chunk[<def-open-u>
-(define (open-u u deep?)
- (set-whole-tree-open! Tree1 (set-union (whole-tree-open Tree1) (list->set
+(define (open-u u deep? tree)
+ (set-whole-tree-open! tree (set-union (whole-tree-open tree) (list->set
 			     (if deep?
 			      (flatten (ess-addr-deep-args (ess-utterance-addr u) (lambda (addr) #f
                               ;(null? (ess-man-args (ess-addr-man addr)))
                               )))
 			      (letrec
 			       ((lam (lambda (l)
-				      (if (or (null? l) (ormap (lambda (x) (closed? x)) l))
+				      (if (or (null? l) (ormap (lambda (x) (closed? x tree)) l))
 				       l
 				       (lam (flatten (map ess-addr-args l)))))))
 			       (lam (list (ess-utterance-addr u))))))))
-  (generate-utterance-tree Tree1)
+  (generate-utterance-tree tree)
   (send Thecanvas on-paint))]
 
 Opens the ess-utterance.  If @racket[deep?], then opens all descendants down to the next code level.  If not @racket[deep?], its immediate children are opened.  If these are already open, then the next level is opened, etc.  This was particularly late night coding -- don't ask me how the code works.  Regenerates the utterance tree.
@@ -783,25 +793,25 @@ Opens the ess-utterance.  If @racket[deep?], then opens all descendants down to 
 Runs in the computational complexity of @racket[generate-utterance-tree] except in cases where very large ess-utterances are being opened, when it may run in linear time relative to the number of already-open descendants (although I suspect it is always dominated by @racket[generate-utterance-tree]).
 
 @chunk[<def-close-u>
-(define (close-u u deep?)
- (set-whole-tree-open! Tree1 (set-subtract (whole-tree-open Tree1) (list->set
+(define (close-u u deep? tree)
+ (set-whole-tree-open! tree (set-subtract (whole-tree-open tree) (list->set
 				(if deep?
-				 (let ((remnant (if (closed? (ess-utterance-addr u)) (ess-utterance-parent u) u)))
+				 (let ((remnant (if (closed? (ess-utterance-addr u) tree) (ess-utterance-parent u tree) u)))
 				  (select remnant)
-				  (flatten (ess-addr-deep-args (ess-utterance-addr remnant) closed?)))
-				 (if (closed? (ess-utterance-addr u))
+				  (flatten (ess-addr-deep-args (ess-utterance-addr remnant) (curryr closed? tree))))
+				 (if (closed? (ess-utterance-addr u) tree)
 				  (begin
-				   (select (ess-utterance-parent u))
-				   (flatten (ess-addr-deep-args (ess-utterance-addr (ess-utterance-parent u)) closed?)))
+				   (select (ess-utterance-parent u tree))
+				   (flatten (ess-addr-deep-args (ess-utterance-addr (ess-utterance-parent u tree)) (curryr closed? tree))))
 				  (letrec
 				   ((lam (lambda (l)
 					  (if (andmap
-					       (lambda (x) (or (closed? x) (null? (ess-addr-args x))))
+					       (lambda (x) (or (closed? x tree) (null? (ess-addr-args x))))
 					       (flatten (map ess-addr-args l)))
 					   l
 					   (lam (flatten (map ess-addr-args l)))))))
 				   (lam (list (ess-utterance-addr u)))))))))
- (generate-utterance-tree Tree1)
+ (generate-utterance-tree tree)
  (send Thecanvas on-paint))]
 
 Closes the ess-utterance.  If @racket[deep?], then closes all descendants.  If not @racket[deep?], then close only the deepest layer.  In either case, if all descendants are already closed, then closes the parent and selects the parent.  Regenerates the utterance tree.
@@ -809,8 +819,9 @@ Closes the ess-utterance.  If @racket[deep?], then closes all descendants.  If n
 Runs in the computational complexity of @racket[generate-utterance-tree] except in cases where very large ess-utterances are being closed, when it may run in linear time relative to the number of already-open descendants (although I suspect it is always dominated by @racket[generate-utterance-tree]).
 
 @chunk[<def-select>
-(define (select u)
- (set-whole-tree-selection! Tree1 u)
+(define (select u tree)
+ (set! Selected-tree tree)
+ (set-whole-tree-selection! tree u)
  (let ((x (+ Scroll-offset-x (ess-utterance-x u)))
        (y (+ Scroll-offset-y (ess-utterance-y u)))
        (w (ess-utterance-w u))
@@ -846,21 +857,21 @@ Runs in constant time.
 (define (box-maj-dim box)
  (if VERTICAL (box-height box) (box-width box)))
 
-(define (ess-addr-width addr)
- (if VERTICAL (box-width (ess-man-text (ess-addr-man addr))) (ess-addr-maj-dim addr)))
+(define (ess-addr-width addr tree)
+ (if VERTICAL (box-width (ess-man-text (ess-addr-man addr))) (ess-addr-maj-dim addr tree)))
 
-(define (ess-addr-height addr)
- (if VERTICAL (ess-addr-maj-dim addr) CELLHEIGHT))
+(define (ess-addr-height addr tree)
+ (if VERTICAL (ess-addr-maj-dim addr tree) CELLHEIGHT))
 
-(define (ess-addr-maj-dim addr)
- (if (closed? addr)
+(define (ess-addr-maj-dim addr tree)
+ (if (closed? addr tree)
   (box-maj-dim (ess-man-text (ess-addr-man addr)))
   (max
    (box-maj-dim (ess-man-text (ess-addr-man addr)))
    (foldl
     +
     0
-    (map (lambda (arg) (ess-addr-maj-dim arg)) (ess-addr-args addr))))))
+    (map (lambda (arg) (ess-addr-maj-dim arg tree)) (ess-addr-args addr))))))
 ]
 
 @subsection{Utility functions}
@@ -874,7 +885,7 @@ Runs in constant time.
 
 @chunk[<def-get-color>
 (define (get-color addr siblings)
- (if (eq? addr (ess-utterance-addr (whole-tree-selection Tree1)))
+ (if (eq? addr (ess-utterance-addr (whole-tree-selection Selected-tree)))
   SELCOLOR
   (if (eq? COLORSCHEME 'gradient)
    (let* ((pos (if (null? (ess-addr-laddr addr)) 0 (last (ess-addr-laddr addr))))
@@ -959,15 +970,18 @@ Runs in constant time.
   (and (< (+ x w) (- Scroll-offset-x)) (not VERTICAL))
   (and (< (+ y h) (- Scroll-offset-y)) VERTICAL)
   (> x (- (/ WIDTH Zoom-factor) Scroll-offset-x))
-  (> y (- (/ WIDTH Zoom-factor) Scroll-offset-y))))]
+  (> y (- (/ WIDTH Zoom-factor) Scroll-offset-y))))
+
+(define (in? dim x y)
+ (and (> x (car dim)) (> y (cadr dim)) (< x (caddr dim)) (< y (cadddr dim))))]
 
 Returns true if the rectangle is visible, or if its children may be visible.
 
 Runs in constant time.
 
 @chunk[<def-open?/closed?>
-(define (open? addr)
- (set-member? (whole-tree-open Tree1) addr))
+(define (open? addr tree)
+ (set-member? (whole-tree-open tree) addr))
 ; #t)
 (define closed? (negate open?))]
 
@@ -976,17 +990,17 @@ Predicates to check if an ess-address is open (i.e. it is in @racket[Open]).
 Runs in constant time.
 
 @chunk[<def-find-utterance>
-(define (find-utterance root x y)
+(define (find-utterance root x y tree)
  (if (or
       (< (min-dim x y) (+ (ess-utterance-min-dim root) (ess-utterance-min-dim-span root)))
-      (closed? (ess-utterance-addr root))
+      (closed? (ess-utterance-addr root) tree)
       (null? (ess-addr-args (ess-utterance-addr root)))
       (> (maj-dim x y) (let ((baby (last (ess-utterance-args root)))) (+ (ess-utterance-maj-dim baby) (ess-utterance-maj-dim-span baby)))))
   root
   (ormap
    (lambda (child)
     (if (< (maj-dim x y) (+ (ess-utterance-maj-dim child) (ess-utterance-maj-dim-span child)))
-     (find-utterance child x y)
+     (find-utterance child x y tree)
      #f))
    (ess-utterance-args root))))]
 
@@ -1145,7 +1159,8 @@ Note that this is dependent (through @racket[mouse-handler-hash]) on the mouse e
 
 @chunk[<def-mouse-handler-hash>
 (define-for-syntax mouse-handler-hash (hash
-			'clicked '(find-utterance (whole-tree-utterance-tree Tree1) (- (/ (send event get-x) Zoom-factor) Scroll-offset-x) (- (/ (send event get-y) Zoom-factor) Scroll-offset-y))
+                        'tree '(let ((x (send event get-x)) (y (send event get-y))) (if (in? Main-dim x y) Tree1 Tree2))
+			'clicked '(find-utterance (whole-tree-utterance-tree (let ((x (send event get-x)) (y (send event get-y))) (if (in? Main-dim x y) Tree1 Tree2))) (- (/ (send event get-x) Zoom-factor) Scroll-offset-x) (- (/ (send event get-y) Zoom-factor) Scroll-offset-y) (let ((x (send event get-x)) (y (send event get-y))) (if (in? Main-dim x y) Tree1 Tree2)))
 			'abs-x '(- (/ (send event get-x) Zoom-factor) Scroll-offset-x)
 			'abs-y '(- (/ (send event get-y) Zoom-factor) Scroll-offset-y)
 			'rel-x '(send event get-x)
@@ -1164,55 +1179,59 @@ This is the hash for @racket[define-mouse-handler].  Keys are symbols and values
 	(set! Scroll-offset-y (+ Scroll-offset-y (/ (+ (- (cdr Mouse-pos)) rel-y) Zoom-factor)))
 	(set! Mouse-pos (cons rel-x rel-y))
 	(send this on-paint)))))
-;    ((eq? (send event get-event-type) 'motion)
-;     (define-mouse-handler (clicked)
-;      (set! Info (format "~s" (ess-addr-man (ess-utterance-addr clicked))))
-;      (paint-info Info #t)))
+    ((eq? (send event get-event-type) 'motion)
+     (define-mouse-handler (clicked)
+      (let ((text (format "~s" (ess-addr-man (ess-utterance-addr clicked)))))
+       (if (equal? Info text)
+        '()
+        (begin
+         (set! Info (format "~s" (ess-addr-man (ess-utterance-addr clicked))))
+         (paint-info Info #t))))))
     ((eq? (send event get-event-type) 'left-down)
      (define-mouse-handler (rel-x rel-y)
       (set! Mouse-pos (cons rel-x rel-y))))
     ((eq? (send event get-event-type) 'left-up)
-     (define-mouse-handler (clicked)
-      (select clicked)
-      (generate-utterance-tree Tree1)
+     (define-mouse-handler (clicked tree)
+      (select clicked tree)
+      (generate-utterance-tree tree)
       (send this on-paint)))
     ((eq? (send event get-event-type) 'middle-down)
-     (define-mouse-handler (clicked)
-      (select clicked)
-      (close-u (whole-tree-selection Tree1) (send event get-control-down))))
+     (define-mouse-handler (clicked tree)
+      (select clicked tree)
+      (close-u (whole-tree-selection tree) (send event get-control-down) Selected-tree)))
     ((eq? (send event get-event-type) 'right-down)
-     (define-mouse-handler (clicked)
-      (select clicked)
-      (open-u (whole-tree-selection Tree1) (send event get-control-down))))
+     (define-mouse-handler (clicked tree)
+      (select clicked tree)
+      (open-u (whole-tree-selection tree) (send event get-control-down) Selected-tree)))
     (#t '())))]
 
 @chunk[<def-key-input>
   (define/override (on-char event)
    (cond
     ((eq? (send event get-key-code) #\f)
-     (begin (set! VERTICAL (not VERTICAL)) (generate-utterance-tree Tree1) (send this on-paint)))
+     (begin (set! VERTICAL (not VERTICAL)) (generate-utterance-tree Selected-tree) (send this on-paint)))
     ((eq? (send event get-key-code) #\F)
-     (begin (set! COLORSCHEME (if (eq? COLORSCHEME 'gradient) 'alternate 'gradient)) (generate-utterance-tree Tree1) (send this on-paint)))
+     (begin (set! COLORSCHEME (if (eq? COLORSCHEME 'gradient) 'alternate 'gradient)) (generate-utterance-tree Selected-tree) (send this on-paint)))
     ((eq? (send event get-key-code) #\h)
-     (go 'left))
+     (go 'left Selected-tree))
     ((eq? (send event get-key-code) #\j)
-     (go 'down))
+     (go 'down Selected-tree))
     ((eq? (send event get-key-code) #\k)
-     (go 'up))
+     (go 'up Selected-tree))
     ((eq? (send event get-key-code) #\l)
-     (go 'right))
+     (go 'right Selected-tree))
     ((eq? (send event get-key-code) #\o)
-     (open-u (whole-tree-selection Tree1) #f))
+     (open-u (whole-tree-selection Selected-tree) #f Selected-tree))
     ((eq? (send event get-key-code) #\c)
-     (close-u (whole-tree-selection Tree1) #f))
+     (close-u (whole-tree-selection Selected-tree) #f Selected-tree))
     ((eq? (send event get-key-code) #\O)
-     (open-u (whole-tree-selection Tree1) #t))
+     (open-u (whole-tree-selection Selected-tree) #t Selected-tree))
     ((eq? (send event get-key-code) #\C)
-     (close-u (whole-tree-selection Tree1) #t))
+     (close-u (whole-tree-selection Selected-tree) #t Selected-tree))
     ((eq? (send event get-key-code) #\z)
-     (set! Scroll-offset-y (- (ess-utterance-y (whole-tree-selection Tree1))))
-     (set! Scroll-offset-x (- (ess-utterance-x (whole-tree-selection Tree1))))
-     (set! Zoom-factor (if (= Zoom-factor 1) (if VERTICAL (/ HEIGHT (ess-utterance-h (whole-tree-selection Tree1))) (/ WIDTH (ess-utterance-w (whole-tree-selection Tree1) ))) 1))
+     (set! Scroll-offset-y (- (ess-utterance-y (whole-tree-selection Selected-tree))))
+     (set! Scroll-offset-x (- (ess-utterance-x (whole-tree-selection Selected-tree))))
+     (set! Zoom-factor (if (= Zoom-factor 1) (if VERTICAL (/ HEIGHT (ess-utterance-h (whole-tree-selection Selected-tree))) (/ WIDTH (ess-utterance-w (whole-tree-selection Selected-tree) ))) 1))
      (send this on-paint))
     ((eq? (send event get-key-code) 'wheel-up)
      (if VERTICAL
@@ -1241,6 +1260,7 @@ Enough talk.
 
 @chunk[<call-functions>
 (generate-utterance-tree Tree1)
+(generate-utterance-tree Tree2)
 (send win show #t)
 ]
 

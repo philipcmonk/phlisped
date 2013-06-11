@@ -2,6 +2,8 @@
 
 (require "graph.ss" "find.ss" "disptree.ss")
 
+(provide Thecanvas Info paint-info)
+
 (define FILENAME "graph.ss")
 
 (define X 0)
@@ -48,7 +50,9 @@
 (display ((compose (curry map triple-end) (curryr (curry graph-neighborhood-edge-forward G) "has child")) (triple-start (seventh (graph-edges G)))))
 (display "\n")
 
-(display-on-screen X Y WIDTH HEIGHT (triple-start (car (graph-edges G))) (compose (curry map triple-end) (curryr (curry graph-neighborhood-edge-forward G) "has child")))
+(display-on-screen Tree1 X Y WIDTH HEIGHT (triple-start (car (graph-edges G))) (compose (curry map triple-end) (curryr (curry graph-neighborhood-edge-forward G) "has child")))
+
+(display-on-screen Tree2 (round (/ (* 2 WIDTH) 3)) Y WIDTH HEIGHT (triple-start (car (graph-edges G))) (compose (curry map triple-end) (curryr (curry graph-neighborhood-edge-forward G) "has child")))
 
 ;(send win show #t)
 
