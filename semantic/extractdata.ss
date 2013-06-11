@@ -50,9 +50,11 @@
 (display ((compose (curry map triple-end) (curryr (curry graph-neighborhood-edge-forward G) "has child")) (triple-start (seventh (graph-edges G)))))
 (display "\n")
 
-(display-on-screen Tree1 X Y WIDTH HEIGHT (triple-start (car (graph-edges G))) (compose (curry map triple-end) (curryr (curry graph-neighborhood-edge-forward G) "has child")))
+(display-on-screen Tree1 0 30 (round (/ (* 2 WIDTH) 3)) (- HEIGHT 30) (triple-start (car (graph-edges G))) (compose (curry map triple-end) (curryr (curry graph-neighborhood-edge-forward G) "has child")))
 
-(display-on-screen Tree2 (round (/ (* 2 WIDTH) 3)) Y WIDTH HEIGHT (triple-start (car (graph-edges G))) (compose (curry map triple-end) (curryr (curry graph-neighborhood-edge-forward G) "has child")))
+(display-on-screen Tree2 (round (/ (* 2 WIDTH) 3)) 30 (round (/ WIDTH 3)) (- HEIGHT 30) (triple-start (car (graph-edges G))) (compose (curry map triple-end) (curryr (curry graph-neighborhood-edge-forward G) "is longer than")))
+
+;(round (/ (* 2 WIDTH) 3))
 
 ;(send win show #t)
 
