@@ -56,7 +56,7 @@ We import the racket/gui library for creating the window and managing the input.
 (require (only-in racket/gui (yield yield-gui) (-> ->-gui)))
 (require sgl sgl/gl)
 
-(provide Thecanvas display-on-screen Tree1 Tree2 Info paint-info)
+(provide Thecanvas display-on-screen Info paint-info)
 
 (require ffi/unsafe ffi/unsafe/define ffi/unsafe/cvector)
 
@@ -88,22 +88,16 @@ Below we define the data structures and functions relating to the storage of the
 The file to be parsed.
 
 @chunk[<def-utterance-tree>
-(struct whole-tree (addr-tree childfunc utterance-tree open selection x y w h offset-x offset-y) #:mutable)
+(struct whole-tree (addr-tree childfunc utterance-tree open selection x y w h offset-x offset-y zoom) #:mutable)
 
 (define (whole-tree-dim tree)
  (list (whole-tree-x tree) (whole-tree-y tree) (whole-tree-w tree) (whole-tree-h tree)))
 
-(define Tree1
- (apply whole-tree 
+(define Trees (list (apply whole-tree 
   (let* ((dummy-addr (ess-addr "" '() (delay '())))
          (dummy-utterance (ess-utterance dummy-addr 0 0 0 0 0 0 '() (cons '(0 0 0) '(0 0 0)))))
-   (list dummy-addr (lambda (a) '()) dummy-utterance (set) dummy-utterance 0 0 0 0 0 0))))
-(define Tree2
- (apply whole-tree 
-  (let* ((dummy-addr (ess-addr "" '() (delay '())))
-         (dummy-utterance (ess-utterance dummy-addr 0 0 0 0 0 0 '() (cons '(0 0 0) '(0 0 0)))))
-   (list dummy-addr (lambda (a) '()) dummy-utterance (set) dummy-utterance 0 0 0 0 0 0))))
-(define Selected-tree Tree1)
+   (list dummy-addr (lambda (a) '()) dummy-utterance (set) dummy-utterance 0 0 0 0 0 0 1)))))
+(define Selected-tree (car Trees))
 (define Utterance-tree #f)]
 
 The utterance tree.  This regenerates often (see @racket[generate-utterance-tree]).
@@ -580,7 +574,9 @@ The currently selected utterance.  This is colored according to @racket[SELCOLOR
 The scroll offsets, in absolute coordinates.  If the offsets for x and y are a and b, then the upper left corner of the viewport is at (-a,-b).  This is primarily changed by the scrollwheel, but zooming can also change this.
 
 @chunk[<def-zoom-factor>
-(define Zoom-factor 1)]
+'()
+;(define Zoom-factor 1)]
+]
 
 The zoom-factor, i.e. the ratio of change in relative coordinates to change in absolute coordinates.  Thus, if it is 1/2, then we are zoomed out so that everything is half as tall and half as wide.
 
@@ -628,44 +624,11 @@ The racket side of the openGL canvas.  Handles painting and mouse/keyboard input
 
      (gl-enable 'scissor-test)
 
-     (apply gl-scissor (whole-tree-dim Tree1))
-     (apply gl-viewport (whole-tree-dim Tree1))
-     (gl-matrix-mode 'projection)
-     (gl-load-identity)
-     (gl-ortho
-      (- (whole-tree-offset-x Tree1))
-      (+ (- (whole-tree-offset-x Tree1)) (/ (whole-tree-w Tree1) Zoom-factor))
-      (+ (whole-tree-offset-y Tree1) (- (/ (whole-tree-h Tree1) Zoom-factor)))
-      (whole-tree-offset-y Tree1)
-      -1.0
-      1.0)
-     (gl-matrix-mode 'modelview)
-     (gl-load-identity)
-
-     (ess-utterance-paint (whole-tree-utterance-tree Tree1) Tree1)
-
-     (apply gl-scissor (whole-tree-dim Tree2))
-     (apply gl-viewport (whole-tree-dim Tree2))
-     (gl-matrix-mode 'projection)
-     (gl-load-identity)
-     (gl-ortho
-      (- (whole-tree-offset-x Tree2))
-      (+ (- (whole-tree-offset-x Tree2)) (/ (whole-tree-w Tree2) Zoom-factor))
-      (+ (whole-tree-offset-y Tree2) (- (/ (whole-tree-h Tree2) Zoom-factor)))
-      (whole-tree-offset-y Tree2)
-      -1.0
-      1.0)
-     (gl-matrix-mode 'modelview)
-     (gl-load-identity)
-
-     (ess-utterance-paint (whole-tree-utterance-tree Tree2) Tree2)
+     (for-each paint-tree Trees)
 
      (gl-disable 'scissor-test)
      (paint-info Info #f)
      (swap-gl-buffers))))]
-
-;     (paintit)
-;     (word-paint WORDS 0 100 0 100 WIDTH HEIGHT)
 
 Resets the openGL buffer, sets the view, and calls @racket[ess-utterance-paint] with @racket[Utterance-tree].
 
@@ -674,15 +637,54 @@ Runs in the computational complexity of @racket[ess-utterance-paint].
 @chunk[<def-ess-utterance-paint> 
 (define paintit (lambda () '()))
 
-(define (display-on-screen tree x y w h root childfunc)
- (set-whole-tree-x! tree x)
- (set-whole-tree-y! tree y)
- (set-whole-tree-w! tree w)
- (set-whole-tree-h! tree h)
- (set-whole-tree-addr-tree! tree (root->ess-addr root childfunc '()))
- (set-whole-tree-selection! tree (ess-utterance (whole-tree-addr-tree tree) 0 0 0 0 0 0 '() #f))
+(define (paint-tree tree)
+ (apply gl-scissor (whole-tree-dim tree))
+ (apply gl-viewport (whole-tree-dim tree))
+ (gl-matrix-mode 'projection)
+ (gl-load-identity)
+ (gl-ortho
+  (- (whole-tree-offset-x tree))
+  (+ (- (whole-tree-offset-x tree)) (/ (whole-tree-w tree) (whole-tree-zoom tree)))
+  (+ (whole-tree-offset-y tree) (- (/ (whole-tree-h tree) (whole-tree-zoom tree))))
+  (whole-tree-offset-y tree)
+  -1.0
+  1.0)
+ (gl-matrix-mode 'modelview)
+ (gl-load-identity)
+ (ess-utterance-paint (whole-tree-utterance-tree tree) tree))
+
+(define (display-on-screen x y w h root childfunc)
+ (let ((tree
+  (let* ((addr (root->ess-addr root childfunc '()))
+         (dummy-utterance (ess-utterance addr 0 0 0 0 0 0 '() (cons '(0 0 0) '(0 0 0)))))
+   (whole-tree
+    addr
+    childfunc
+    dummy-utterance
+    (set)
+    dummy-utterance
+    x
+    y
+    w
+    h
+    0
+    0
+    1))))
  (set-whole-tree-utterance-tree! tree (ess-addr->ess-utterance (whole-tree-addr-tree tree) 0 0 w 0 '() tree))
- (set-whole-tree-childfunc! tree childfunc))
+ (set-whole-tree-selection! tree (whole-tree-utterance-tree tree))
+ (set! Trees (append Trees (list tree)))))
+;  (apply whole-tree 
+;   (let* ((dummy-addr (ess-addr "" '() (delay '())))
+;          (dummy-utterance (ess-utterance dummy-addr 0 0 0 0 0 0 '() (cons '(0 0 0) '(0 0 0)))))
+;    (list dummy-addr (lambda (a) '()) dummy-utterance (set) dummy-utterance 0 0 0 0 0 0 1))))
+; (set-whole-tree-x! tree x)
+; (set-whole-tree-y! tree y)
+; (set-whole-tree-w! tree w)
+; (set-whole-tree-h! tree h)
+; (set-whole-tree-addr-tree! tree (root->ess-addr root childfunc '()))
+; (set-whole-tree-selection! tree (ess-utterance (whole-tree-addr-tree tree) 0 0 0 0 0 0 '() #f))
+; (set-whole-tree-utterance-tree! tree (ess-addr->ess-utterance (whole-tree-addr-tree tree) 0 0 w 0 '() tree))
+; (set-whole-tree-childfunc! tree childfunc))
 ; (set! ARGS (whole-tree-addr-tree Tree1))
 ; (set! paintit
 ;  (lambda () (ess-utterance-paint Utterance-tree))))
@@ -725,11 +727,11 @@ Runs in the computational complexity of @racket[ess-utterance-paint].
    '()
    (begin
     (draw-rectangle (cdr clr) x y w h)
-    (if (< Zoom-factor 1) '()
+    (if (< (whole-tree-zoom tree) 1) '()
      (draw-text
       text
-      (* Zoom-factor (center x w text-w (- (whole-tree-offset-x tree)) WIDTH))
-      (* Zoom-factor (+ text-h -3 (center y h text-h (- (whole-tree-offset-y tree)) HEIGHT)))
+      (* (whole-tree-zoom tree) (center x w text-w (- (whole-tree-offset-x tree)) (whole-tree-w tree)))
+      (* (whole-tree-zoom tree) (+ text-h -3 (center y h text-h (- (whole-tree-offset-y tree)) (whole-tree-h tree))))
       (car clr)
       tree))
     (for-each (lambda (arg) (ess-utterance-paint arg tree)) args)))))]
@@ -865,16 +867,16 @@ Runs in the computational complexity of @racket[generate-utterance-tree] except 
   (if
    (or
     (and (negative? (+ x w)) (not VERTICAL))
-    (> x (/ (whole-tree-w tree) Zoom-factor)))
+    (> x (/ (whole-tree-w tree) (whole-tree-zoom tree))))
    (let ((c (+ (ess-utterance-x u) (/ w 2))))
-    (set-whole-tree-offset-x! tree (- (+ c (- (/ (whole-tree-w tree) Zoom-factor 2))))))
+    (set-whole-tree-offset-x! tree (- (+ c (- (/ (whole-tree-w tree) (whole-tree-zoom tree) 2))))))
    '())
   (if
    (or
     (and (negative? (+ y h)) VERTICAL)
-    (> y (/ (whole-tree-h tree) Zoom-factor)))
+    (> y (/ (whole-tree-h tree) (whole-tree-zoom tree))))
    (let ((c (+ (ess-utterance-y u) (/ h 2))))
-    (set-whole-tree-offset-y! tree (- (+ c (- (/ (whole-tree-h tree) Zoom-factor 2))))))
+    (set-whole-tree-offset-y! tree (- (+ c (- (/ (whole-tree-h tree) (whole-tree-zoom tree) 2))))))
    '())))]
 
 Selects the ess-utterance.  Sets @racket[Selection] to the ess-utterance, and if invisible, then centers viewport onto the new selection.  Does @emph{not} regenerate the utterance tree -- this must be done by the caller, or else the change will not be visible.
@@ -1005,11 +1007,11 @@ Runs in constant time.
  (or
   (and (< (+ x w) (- (whole-tree-offset-x tree))) (not VERTICAL))
   (and (< (+ y h) (- (whole-tree-offset-y tree))) VERTICAL)
-  (> x (- (/ (whole-tree-w tree) Zoom-factor) (whole-tree-offset-x tree)))
-  (> y (- (/ (whole-tree-h tree) Zoom-factor) (whole-tree-offset-y tree)))))
+  (> x (- (/ (whole-tree-w tree) (whole-tree-zoom tree)) (whole-tree-offset-x tree)))
+  (> y (- (/ (whole-tree-h tree) (whole-tree-zoom tree)) (whole-tree-offset-y tree)))))
 
 (define (in? dim x y)
- (and (> x (car dim)) (> y (cadr dim)) (< x (caddr dim)) (< y (cadddr dim))))]
+ (and (> x (car dim)) (> y (cadr dim)) (< x (+ (car dim) (caddr dim))) (< y (+ (cadr dim) (cadddr dim)))))]
 
 Returns true if the rectangle is visible, or if its children may be visible.
 
@@ -1187,7 +1189,7 @@ The distance traversed by a single mouse wheel movement event.  Currently, this 
 	(reqs (cadr args))
 	(code (cddr args))
 	(vals (map (lambda (req) (list req (hash-ref mouse-handler-hash req))) reqs)))
-  (datum->syntax stx `(let ((tree (let ((x (send event get-x)) (y (send event get-y))) (if (in? (whole-tree-dim Tree1) x y) Tree1 Tree2))))
+  (datum->syntax stx `(let ((tree (let ((x (send event get-x)) (y (send event get-y))) (or (findf (compose (curryr in? x y) whole-tree-dim) Trees) Selected-tree))))
                        (let ,vals ,@code)))))]
 
 This is a convenience macro for writing responses to mouse events.  Its usage is as follows:  @racket[(define-mouse-handler (data) code)].  @racket[(data)] is a list of symbols to be bound to their meaning.  For example, @racket['clicked] is bound to the ess-utterance that was clicked on.  For a list of all possible symbols, see @racket[mouse-handler-hash] (below).  @racket[code] is the actual handler.  This may refer to any of the symbols in @racket[data] (since they have now been bound).
@@ -1197,9 +1199,9 @@ Note that this is dependent (through @racket[mouse-handler-hash]) on the mouse e
 @chunk[<def-mouse-handler-hash>
 (define Chosen-tree '())
 (define-for-syntax mouse-handler-hash (hash
-			'clicked '(find-utterance (whole-tree-utterance-tree tree) (+ (- (whole-tree-x tree)) (- (/ (send event get-x) Zoom-factor) (whole-tree-offset-x tree))) (+ (- HEIGHT (whole-tree-h tree) (whole-tree-y tree)) (- (/ (send event get-y) Zoom-factor) (whole-tree-offset-y tree))) tree)
-			'abs-x '(- (/ (send event get-x) Zoom-factor) (whole-tree-offset-x tree))
-			'abs-y '(- (/ (send event get-y) Zoom-factor) (whole-tree-offset-y tree))
+			'clicked '(find-utterance (whole-tree-utterance-tree tree) (+ (- (whole-tree-x tree)) (- (/ (send event get-x) (whole-tree-zoom tree)) (whole-tree-offset-x tree))) (+ (- HEIGHT (whole-tree-h tree) (whole-tree-y tree)) (- (/ (send event get-y) (whole-tree-zoom tree)) (whole-tree-offset-y tree))) tree)
+			'abs-x '(- (/ (send event get-x) (whole-tree-zoom tree)) (whole-tree-offset-x tree))
+			'abs-y '(- (/ (send event get-y) (whole-tree-zoom tree)) (whole-tree-offset-y tree))
 			'rel-x '(send event get-x)
 			'rel-y '(send event get-y)))]
 
@@ -1212,8 +1214,8 @@ This is the hash for @racket[define-mouse-handler].  Keys are symbols and values
      (define-mouse-handler (rel-x rel-y)
       (cond
        ((send event get-left-down)
-        (set-whole-tree-offset-x! Chosen-tree (+ (whole-tree-offset-x Chosen-tree) (/ (+ (- (car Mouse-pos)) rel-x) Zoom-factor)))
-        (set-whole-tree-offset-y! Chosen-tree (+ (whole-tree-offset-y Chosen-tree) (/ (+ (- (cdr Mouse-pos)) rel-y) Zoom-factor)))
+        (set-whole-tree-offset-x! Chosen-tree (+ (whole-tree-offset-x Chosen-tree) (/ (+ (- (car Mouse-pos)) rel-x) (whole-tree-zoom tree))))
+        (set-whole-tree-offset-y! Chosen-tree (+ (whole-tree-offset-y Chosen-tree) (/ (+ (- (cdr Mouse-pos)) rel-y) (whole-tree-zoom tree))))
 	(set! Mouse-pos (cons rel-x rel-y))
 	(send this on-paint)))))
     ((eq? (send event get-event-type) 'motion)
@@ -1251,7 +1253,7 @@ This is the hash for @racket[define-mouse-handler].  Keys are symbols and values
     ((eq? (send event get-key-code) #\F)
      (begin (set! COLORSCHEME (if (eq? COLORSCHEME 'gradient) 'alternate 'gradient)) (generate-utterance-tree Selected-tree) (send this on-paint)))
     ((eq? (send event get-key-code) #\n)
-     (display-on-screen Tree2 (whole-tree-w Tree1) 30 (round (/ WIDTH 3)) (- HEIGHT 30) (ess-addr-man (ess-utterance-addr (whole-tree-selection Tree1))) (whole-tree-childfunc Tree2)))
+     (display-on-screen (round (/ (* 2 WIDTH) 3)) 30 (round (/ WIDTH 3)) (- HEIGHT 30) (ess-addr-man (ess-utterance-addr (whole-tree-selection Selected-tree))) (whole-tree-childfunc Selected-tree)))
     ((eq? (send event get-key-code) #\h)
      (go 'left Selected-tree))
     ((eq? (send event get-key-code) #\j)
@@ -1271,7 +1273,7 @@ This is the hash for @racket[define-mouse-handler].  Keys are symbols and values
     ((eq? (send event get-key-code) #\z)
      (set-whole-tree-offset-x! Selected-tree (- (ess-utterance-y (whole-tree-selection Selected-tree))))
      (set-whole-tree-offset-y! Selected-tree (- (ess-utterance-x (whole-tree-selection Selected-tree))))
-     (set! Zoom-factor (if (= Zoom-factor 1) (if VERTICAL (/ HEIGHT (ess-utterance-h (whole-tree-selection Selected-tree))) (/ WIDTH (ess-utterance-w (whole-tree-selection Selected-tree) ))) 1))
+     (set-whole-tree-zoom! Selected-tree (if (= (whole-tree-zoom Selected-tree) 1) (if VERTICAL (/ (whole-tree-h Selected-tree) (ess-utterance-h (whole-tree-selection Selected-tree))) (/ (whole-tree-w Selected-tree) (ess-utterance-w (whole-tree-selection Selected-tree) ))) 1))
      (send this on-paint))
     ((eq? (send event get-key-code) 'wheel-up)
      (if VERTICAL
@@ -1299,8 +1301,6 @@ This is the hash for @racket[define-mouse-handler].  Keys are symbols and values
 Enough talk.
 
 @chunk[<call-functions>
-(generate-utterance-tree Tree1)
-(generate-utterance-tree Tree2)
 (send win show #t)
 ]
 
