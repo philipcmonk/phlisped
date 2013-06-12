@@ -1187,7 +1187,7 @@ The distance traversed by a single mouse wheel movement event.  Currently, this 
 	(reqs (cadr args))
 	(code (cddr args))
 	(vals (map (lambda (req) (list req (hash-ref mouse-handler-hash req))) reqs)))
-  (datum->syntax stx `(let ((tree (let ((x (send event get-x)) (y (send event get-y))) (or (findf (compose (curryr in? x y) whole-tree-dim) Trees) Selected-tree))))
+  (datum->syntax stx `(let ((tree (let ((x (send event get-x)) (y (send event get-y))) (or (findf (compose (curryr in? x (- HEIGHT y)) whole-tree-dim) Trees) Selected-tree))))
                        (let ,vals ,@code)))))]
 
 This is a convenience macro for writing responses to mouse events.  Its usage is as follows:  @racket[(define-mouse-handler (data) code)].  @racket[(data)] is a list of symbols to be bound to their meaning.  For example, @racket['clicked] is bound to the ess-utterance that was clicked on.  For a list of all possible symbols, see @racket[mouse-handler-hash] (below).  @racket[code] is the actual handler.  This may refer to any of the symbols in @racket[data] (since they have now been bound).
@@ -1197,7 +1197,15 @@ Note that this is dependent (through @racket[mouse-handler-hash]) on the mouse e
 @chunk[<def-mouse-handler-hash>
 (define Chosen-tree '())
 (define-for-syntax mouse-handler-hash (hash
-			'clicked '(find-utterance (whole-tree-utterance-tree tree) (+ (- (whole-tree-x tree)) (- (/ (send event get-x) (whole-tree-zoom tree)) (whole-tree-offset-x tree))) (+ (- HEIGHT (whole-tree-h tree) (whole-tree-y tree)) (- (/ (send event get-y) (whole-tree-zoom tree)) (whole-tree-offset-y tree))) tree)
+			'clicked '(find-utterance
+                                   (whole-tree-utterance-tree tree)
+                                   (+
+                                    (- (whole-tree-x tree))
+                                    (- (/ (send event get-x) (whole-tree-zoom tree)) (whole-tree-offset-x tree)))
+                                   (+
+                                    (+ (- HEIGHT) (whole-tree-h tree) (whole-tree-y tree))
+                                    (- (/ (send event get-y) (whole-tree-zoom tree)) (whole-tree-offset-y tree)))
+                                   tree)
 			'abs-x '(- (/ (send event get-x) (whole-tree-zoom tree)) (whole-tree-offset-x tree))
 			'abs-y '(- (/ (send event get-y) (whole-tree-zoom tree)) (whole-tree-offset-y tree))
 			'rel-x '(send event get-x)
