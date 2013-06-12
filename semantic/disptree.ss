@@ -653,6 +653,19 @@ Runs in the computational complexity of @racket[ess-utterance-paint].
  (gl-load-identity)
  (ess-utterance-paint (whole-tree-utterance-tree tree) tree))
 
+(define (add-to-screen root childfunc)
+ (let* ((num (length (cdr Trees)))
+        (h (round (/ (- HEIGHT 30) (+ 1 num)))))
+  (for-each
+   (lambda (tree n)
+    (set-whole-tree-x! tree 0)
+    (set-whole-tree-y! tree (+ 30 (* n h)))
+    (set-whole-tree-w! tree WIDTH)
+    (set-whole-tree-h! tree h))
+   (cdr Trees)
+   (build-list num identity))
+  (display-on-screen 0 (+ 30 (* num h)) WIDTH h root childfunc)))
+
 (define (display-on-screen x y w h root childfunc)
  (let ((tree
   (let* ((addr (root->ess-addr root childfunc '()))
@@ -673,21 +686,6 @@ Runs in the computational complexity of @racket[ess-utterance-paint].
  (set-whole-tree-utterance-tree! tree (ess-addr->ess-utterance (whole-tree-addr-tree tree) 0 0 w 0 '() tree))
  (set-whole-tree-selection! tree (whole-tree-utterance-tree tree))
  (set! Trees (append Trees (list tree)))))
-;  (apply whole-tree 
-;   (let* ((dummy-addr (ess-addr "" '() (delay '())))
-;          (dummy-utterance (ess-utterance dummy-addr 0 0 0 0 0 0 '() (cons '(0 0 0) '(0 0 0)))))
-;    (list dummy-addr (lambda (a) '()) dummy-utterance (set) dummy-utterance 0 0 0 0 0 0 1))))
-; (set-whole-tree-x! tree x)
-; (set-whole-tree-y! tree y)
-; (set-whole-tree-w! tree w)
-; (set-whole-tree-h! tree h)
-; (set-whole-tree-addr-tree! tree (root->ess-addr root childfunc '()))
-; (set-whole-tree-selection! tree (ess-utterance (whole-tree-addr-tree tree) 0 0 0 0 0 0 '() #f))
-; (set-whole-tree-utterance-tree! tree (ess-addr->ess-utterance (whole-tree-addr-tree tree) 0 0 w 0 '() tree))
-; (set-whole-tree-childfunc! tree childfunc))
-; (set! ARGS (whole-tree-addr-tree Tree1))
-; (set! paintit
-;  (lambda () (ess-utterance-paint Utterance-tree))))
 
 (define (root->ess-addr man childlist laddr)
  (ess-addr man laddr
@@ -1253,7 +1251,8 @@ This is the hash for @racket[define-mouse-handler].  Keys are symbols and values
     ((eq? (send event get-key-code) #\F)
      (begin (set! COLORSCHEME (if (eq? COLORSCHEME 'gradient) 'alternate 'gradient)) (generate-utterance-tree Selected-tree) (send this on-paint)))
     ((eq? (send event get-key-code) #\n)
-     (display-on-screen (round (/ (* 2 WIDTH) 3)) 30 (round (/ WIDTH 3)) (- HEIGHT 30) (ess-addr-man (ess-utterance-addr (whole-tree-selection Selected-tree))) (whole-tree-childfunc Selected-tree)))
+     (add-to-screen (ess-addr-man (ess-utterance-addr (whole-tree-selection Selected-tree))) (whole-tree-childfunc Selected-tree)))
+;     (display-on-screen (round (/ (* 2 WIDTH) 3)) 30 (round (/ WIDTH 3)) (- HEIGHT 30) (ess-addr-man (ess-utterance-addr (whole-tree-selection Selected-tree))) (whole-tree-childfunc Selected-tree)))
     ((eq? (send event get-key-code) #\h)
      (go 'left Selected-tree))
     ((eq? (send event get-key-code) #\j)
