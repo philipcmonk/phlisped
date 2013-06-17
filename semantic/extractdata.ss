@@ -1,6 +1,6 @@
 #lang racket
 
-(require "graph.ss" "find.ss" "output3.ss")
+(require "graph.ss" "find.ss" "disptree.ss")
 (require racket/set)
 
 (provide Thecanvas Info paint-info)
@@ -62,13 +62,20 @@
 ; (string->graph (file->string GRFILE)))
 
 (define G
-  (call-with-input-file GRFILE (lambda (f) (read f))))
+ (call-with-input-file GRFILE (lambda (f) (read f))))
 
-(define (get-rep id)
+(define (get-rep id child-fun)
+ (cons id (get-written id child-fun)))
+; (let ((nbhd (graph-neighborhood-edge-forward G id "is written")))
+;  (if (null? nbhd)
+;   (cons id '())
+;   (cons id (triple-end (car nbhd))))))
+
+(define (get-written id child-fun)
  (let ((nbhd (graph-neighborhood-edge-forward G id "is written")))
   (if (null? nbhd)
-   (cons id '())
-   (cons id (triple-end (car nbhd))))))
+   (get-written (caar (child-fun (cons id '()))) child-fun)
+   (triple-end (car nbhd)))))
 
 (display (graph->string G))
 ;(call-with-output-file GRFILE #:exists 'truncate (lambda (f) (write G f)))
@@ -93,12 +100,13 @@
 ;  (in f))))))
 ;(display "\n")
 
-(define child-fun
+(define child-fun (lambda (a) (
  (compose
-  (curry map (compose get-rep triple-end))
+  (curry map (compose (curryr get-rep child-fun) triple-end))
   (compose
    (curryr (curry graph-neighborhood-edge-forward G) "has child")
-   car)))
+   car))
+  a)))
 
 (define (root->list root child-fun)
  (if (null? (cdr root))

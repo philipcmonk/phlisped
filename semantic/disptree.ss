@@ -94,7 +94,7 @@ The file to be parsed.
  (list (whole-tree-x tree) (whole-tree-y tree) (whole-tree-w tree) (whole-tree-h tree)))
 
 (define Trees (list (apply whole-tree 
-  (let* ((dummy-addr (ess-addr "" '() (delay '())))
+  (let* ((dummy-addr (ess-addr '(0 . "") '() (delay '())))
          (dummy-utterance (ess-utterance dummy-addr 0 0 0 0 0 0 '() (cons '(0 0 0) '(0 0 0)))))
    (list dummy-addr (lambda (a) '()) dummy-utterance (set) dummy-utterance 0 0 0 0 0 0 1)))))
 (define Selected-tree (car Trees))
@@ -711,9 +711,10 @@ Runs in the computational complexity of @racket[ess-utterance-paint].
       (build-list (length children) values))))))
 
 (define (ess-man-text lst)
- (if (list? lst)
-  (ess-man-text (car lst))
-  (format "~s" lst)))
+ (format "~s" (cdr lst)))
+; (if (list? lst)
+;  (ess-man-text (car lst))
+;  (format "~s" lst)))
  
 (define (ess-utterance-paint u tree)
  (let* ((text (ess-man-text (ess-addr-man (ess-utterance-addr u))))
