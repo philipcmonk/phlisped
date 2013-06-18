@@ -58,18 +58,11 @@
 ;         (cons x (in rem)))))
 ;      (in f)))))))
 
-;(define G
-; (string->graph (file->string GRFILE)))
-
 (define G
  (call-with-input-file GRFILE (lambda (f) (read f))))
 
 (define (get-rep id child-fun)
  (cons id (get-written id child-fun)))
-; (let ((nbhd (graph-neighborhood-edge-forward G id "is written")))
-;  (if (null? nbhd)
-;   (cons id '())
-;   (cons id (triple-end (car nbhd))))))
 
 (define (get-written id child-fun)
  (let ((nbhd (graph-neighborhood-edge-forward G id "is written")))
@@ -79,26 +72,6 @@
 
 (display (graph->string G))
 ;(call-with-output-file GRFILE #:exists 'truncate (lambda (f) (write G f)))
-
-;(display (cadr (graph-edges G)))
-;(display "\n")
-;(display ((compose (curry map triple-end) (curryr (curry graph-neighborhood-edge-forward G) "has tail child")) (triple-start (car (graph-edges G)))))
-;(display "\n")
-
-;(display "\n")
-;(display ((compose (curry map triple-end) (curryr (curry graph-neighborhood-edge-forward G) "has child")) (triple-start (seventh (graph-edges G)))))
-;(display "\n")
-
-;(display (extract (idify (call-with-input-file FILENAME
-; (lambda (f)
-;  (read-accept-reader #t)
-;  (define (in rem)
-;   (let ((x (read rem)))
-;    (if (eof-object? x)
-;     '(end)
-;     (cons x (in rem)))))
-;  (in f))))))
-;(display "\n")
 
 (define child-fun (lambda (a) (
  (compose
@@ -120,10 +93,3 @@
  (display-on-screen 0 30 (round (/ WIDTH 2)) (- HEIGHT 30) (cons id '())
   child-fun))
 
-;(display-on-screen (round (/ WIDTH 2)) 30 (round (/ WIDTH 2)) (- HEIGHT 30) (triple-start (car (graph-edges G))) (compose (curry map triple-end) (curryr (curry graph-neighborhood-edge-forward G) "has child")))
-
-;(round (/ (* 2 WIDTH) 3))
-
-;(send win show #t)
-
-;(display ((compose (curry map triple-end) (curryr (curry graph-neighborhood-edge-forward G) "has child")) "(set-for-each (graph-edges g) display-triple)"))
