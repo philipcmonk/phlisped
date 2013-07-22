@@ -529,9 +529,9 @@ For the alternate color scheme, we have the following logic to determine the col
 I honestly have no idea what @racket[FGCOLOR] is supposed to do, but it seems to be related to the gradient mode.
 
 @chunk[<def-cellheight>
-(define CELLHEIGHT 35)]
+(define CELLHEIGHT 25)]
 
-The height of a cell (in absolute coordinates) in horizontal mode.  We don't just take the height of text becaues we may want to add some padding.
+The height of a cell (in absolute coordinates) in horizontal mode.  We don't just take the height of text because we may want to add some padding.
 
 @chunk[<def-open>
 '()
@@ -582,7 +582,7 @@ The zoom-factor, i.e. the ratio of change in relative coordinates to change in a
 
 @chunk[<def-font>
 (define Font (ftglCreateBitmapFont "/home/philip/olddesktop/vilisp/VeraMono.ttf"))
-(ftglSetFontFaceSize Font 24 72)]
+(ftglSetFontFaceSize Font 12 72)]
 
 The font used for all text.  Two things are important:  the type of font, and the font itself.  The font file is a truetype font file.  The type of font is one of those allowed by FTGL.  We use Bitmap since it seems to have the best performance.  Pixmap is  a little slower but is a better rendering.  The others do not seem to work as-is.
 
@@ -617,6 +617,76 @@ The racket side of the openGL canvas.  Handles painting and mouse/keyboard input
 
 @chunk[<def-paint-handler>
   (define/override (on-paint)
+   (define (paint-tree tree)
+    (define (ess-utterance-paint u tree)
+     (define (invisible? x y w h tree)
+      (or
+       (and (< (+ x w) (- (whole-tree-offset-x tree))) (not VERTICAL))
+       (and (< (+ y h) (- (whole-tree-offset-y tree))) VERTICAL)
+       (> x (- (/ (whole-tree-w tree) (whole-tree-zoom tree)) (whole-tree-offset-x tree)))
+       (> y (- (/ (whole-tree-h tree) (whole-tree-zoom tree)) (whole-tree-offset-y tree)))))
+
+     (define (center offset lenwhole lenpiece start width)
+      (let ((visible-width (- (min (+ offset lenwhole) (+ start width)) (max offset start))))
+       (if (< visible-width lenpiece)
+        (if (< offset start)
+         (- (+ offset lenwhole) lenpiece)
+         offset)
+        (+ (max offset start) (/ visible-width 2) (- (/ lenpiece 2))))))
+
+     (define (draw-rectangle clr x y w h)
+      (gl-color (/ (car clr) 255) (/ (cadr clr) 255) (/ (caddr clr) 255))
+    
+      (gl-begin 'quads)
+      (gl-vertex x (- y))
+      (gl-vertex (+ x w) (- y))
+      (gl-vertex (+ x w) (- (+ y h)))
+      (gl-vertex x (- (+ y h)))
+      (gl-end))
+
+     (define (draw-text text x y clr tree)
+      (gl-color (/ (car clr) 255) (/ (cadr clr) 255) (/ (caddr clr) 255))
+      (gl-raster-pos (- 1 (whole-tree-offset-x tree)) (- (whole-tree-offset-y tree) 1))
+      (glBitmap 0 0 0 0 (+ x (whole-tree-offset-x tree)) (- (+ y (whole-tree-offset-y tree))) (make-cvector _uint8 1))
+      (ftglRenderFont Font text 65535))
+
+     (let* ((text (ess-man-text (ess-addr-man (ess-utterance-addr u))))
+            (x (ess-utterance-x u))
+            (y (ess-utterance-y u))
+            (w (ess-utterance-w u))
+            (h (ess-utterance-h u))
+            (text-w (ess-utterance-text-w u))
+            (text-h (ess-utterance-text-h u))
+            (args (ess-utterance-args u))
+            (clr (ess-utterance-clr u)))
+      (if (invisible? x y w h tree)
+       '()
+       (begin
+        (draw-rectangle (if (eq? Selected-tree tree) (cdr clr) (map (curryr / 3) (cdr clr))) x y w h)
+        (if (< (whole-tree-zoom tree) 1) '()
+         (draw-text
+          text
+          (* (whole-tree-zoom tree) (center x w text-w (- (whole-tree-offset-x tree)) (whole-tree-w tree)))
+          (* (whole-tree-zoom tree) (+ text-h -3 (center y h text-h (- (whole-tree-offset-y tree)) (whole-tree-h tree))))
+          (car clr)
+          tree))
+        (for-each (lambda (arg) (ess-utterance-paint arg tree)) args)))))
+
+    (apply gl-scissor (whole-tree-dim tree))
+    (apply gl-viewport (whole-tree-dim tree))
+    (gl-matrix-mode 'projection)
+    (gl-load-identity)
+    (gl-ortho
+     (- (whole-tree-offset-x tree))
+     (+ (- (whole-tree-offset-x tree)) (/ (whole-tree-w tree) (whole-tree-zoom tree)))
+     (+ (whole-tree-offset-y tree) (- (/ (whole-tree-h tree) (whole-tree-zoom tree))))
+     (whole-tree-offset-y tree)
+     -1.0
+     1.0)
+    (gl-matrix-mode 'modelview)
+    (gl-load-identity)
+    (ess-utterance-paint (whole-tree-utterance-tree tree) tree))
+
    (with-gl-context
     (lambda ()
      (gl-clear-color 0.0 0.0 0.0 0.0)
@@ -637,21 +707,6 @@ Runs in the computational complexity of @racket[ess-utterance-paint].
 @chunk[<def-ess-utterance-paint> 
 (define paintit (lambda () '()))
 
-(define (paint-tree tree)
- (apply gl-scissor (whole-tree-dim tree))
- (apply gl-viewport (whole-tree-dim tree))
- (gl-matrix-mode 'projection)
- (gl-load-identity)
- (gl-ortho
-  (- (whole-tree-offset-x tree))
-  (+ (- (whole-tree-offset-x tree)) (/ (whole-tree-w tree) (whole-tree-zoom tree)))
-  (+ (whole-tree-offset-y tree) (- (/ (whole-tree-h tree) (whole-tree-zoom tree))))
-  (whole-tree-offset-y tree)
-  -1.0
-  1.0)
- (gl-matrix-mode 'modelview)
- (gl-load-identity)
- (ess-utterance-paint (whole-tree-utterance-tree tree) tree))
 
 (define (add-to-screen root childfunc)
  (display-on-screen 0 0 (/ WIDTH 2) 0 root childfunc)
@@ -716,28 +771,7 @@ Runs in the computational complexity of @racket[ess-utterance-paint].
 ;  (ess-man-text (car lst))
 ;  (format "~s" lst)))
  
-(define (ess-utterance-paint u tree)
- (let* ((text (ess-man-text (ess-addr-man (ess-utterance-addr u))))
-	(x (ess-utterance-x u))
-	(y (ess-utterance-y u))
-	(w (ess-utterance-w u))
-	(h (ess-utterance-h u))
-	(text-w (ess-utterance-text-w u))
-	(text-h (ess-utterance-text-h u))
-	(args (ess-utterance-args u))
-	(clr (ess-utterance-clr u)))
-  (if (invisible? x y w h tree)
-   '()
-   (begin
-    (draw-rectangle (if (eq? Selected-tree tree) (cdr clr) (map (curryr / 3) (cdr clr))) x y w h)
-    (if (< (whole-tree-zoom tree) 1) '()
-     (draw-text
-      text
-      (* (whole-tree-zoom tree) (center x w text-w (- (whole-tree-offset-x tree)) (whole-tree-w tree)))
-      (* (whole-tree-zoom tree) (+ text-h -3 (center y h text-h (- (whole-tree-offset-y tree)) (whole-tree-h tree))))
-      (car clr)
-      tree))
-    (for-each (lambda (arg) (ess-utterance-paint arg tree)) args)))))]
+]
 
 Checks if an ess-utterance is visible, and if so, paints it and recursively maps onto its children.  Drawing an ess-utterance means drawing a rectangle with attributes defined in the ess-utterance, and then drawing text on top of it.  Only draws text if not zoomed out further than natural (@racket[Zoom-factor] of @racket[1]).
 
@@ -766,26 +800,16 @@ Paints information into the display at the bottom of the screen.  Usually, this 
 Runs in constant time (I believe; it may run in linear time relative to the length of the text).
 
 @chunk[<def-draw-rectangle>
-(define (draw-rectangle clr x y w h)
- (gl-color (/ (car clr) 255) (/ (cadr clr) 255) (/ (caddr clr) 255))
-
- (gl-begin 'quads)
- (gl-vertex x (- y))
- (gl-vertex (+ x w) (- y))
- (gl-vertex (+ x w) (- (+ y h)))
- (gl-vertex x (- (+ y h)))
- (gl-end))]
+'()
+]
 
 Draws a rectangle at @racket[(x y)] with width @racket[w] and height @racket[h], in absolute coordinates.  Uses the rgb values specified in the 3-list @racket[color].
 
 Runs in constant time.
 
 @chunk[<def-draw-text>
-(define (draw-text text x y clr tree)
- (gl-color (/ (car clr) 255) (/ (cadr clr) 255) (/ (caddr clr) 255))
- (gl-raster-pos (- 1 (whole-tree-offset-x tree)) (- (whole-tree-offset-y tree) 1))
- (glBitmap 0 0 0 0 (+ x (whole-tree-offset-x tree)) (- (+ y (whole-tree-offset-y tree))) (make-cvector _uint8 1))
- (ftglRenderFont Font text 65535))]
+'()
+]
 
 Draws text at @racket[(x y)], in absolute coordinates.  Uses the rgb values specified in the 3-list @racket[color].
 
@@ -948,13 +972,8 @@ Runs in constant time.
 Runs in constant time.
 
 @chunk[<def-center>
-(define (center offset lenwhole lenpiece start width)
- (let ((visible-width (- (min (+ offset lenwhole) (+ start width)) (max offset start))))
-  (if (< visible-width lenpiece)
-   (if (< offset start)
-    (- (+ offset lenwhole) lenpiece)
-    offset)
-   (+ (max offset start) (/ visible-width 2) (- (/ lenpiece 2))))))]
+'()
+]
 
 @racket[offset] is the starting point of a line segment.
 
@@ -1006,12 +1025,6 @@ Converts relative coordintes into OpenGL relative coordinates (deals with y-dime
 Runs in constant time.
 
 @chunk[<def-invisible?>
-(define (invisible? x y w h tree)
- (or
-  (and (< (+ x w) (- (whole-tree-offset-x tree))) (not VERTICAL))
-  (and (< (+ y h) (- (whole-tree-offset-y tree))) VERTICAL)
-  (> x (- (/ (whole-tree-w tree) (whole-tree-zoom tree)) (whole-tree-offset-x tree)))
-  (> y (- (/ (whole-tree-h tree) (whole-tree-zoom tree)) (whole-tree-offset-y tree)))))
 
 (define (in? dim x y)
  (and (> x (car dim)) (> y (cadr dim)) (< x (+ (car dim) (caddr dim))) (< y (+ (cadr dim) (cadddr dim)))))]
@@ -1079,35 +1092,36 @@ Runs in constant time.
 
 ; (draw-text (string-append "code:  " (format "~s" args) "\n") x y (car INFOCOLOR)))
 
-(def-wout-cmd 'section
- (map 
-  (lambda (n)
-   (let ((text (format "~s" args)))
-    (wout-word
-     (lambda (x y)
-      (draw-text text x y (car INFOCOLOR)))
-     (box-width text))))
-  '(1 2 3 4 5)))
-
-(def-wout-cmd 'subsection
- (map 
-  (lambda (n)
-   (let ((text (format "~s" args)))
-    (wout-word
-     (lambda (x y)
-      (draw-text text x y (car INFOCOLOR)))
-     (box-width text))))
-  '(1 2 3)))
-
-(def-win-cmd 'itemize
- (draw-text (string-append "itemize:  " (format "~s" args) "\n") x y (car INFOCOLOR)))
-
+;(def-wout-cmd 'section
+; (map 
+;  (lambda (n)
+;   (let ((text (format "~s" args)))
+;    (wout-word
+;     (lambda (x y)
+;      (draw-text text x y (car INFOCOLOR)))
+;     (box-width text))))
+;  '(1 2 3 4 5)))
+;
+;(def-wout-cmd 'subsection
+; (map 
+;  (lambda (n)
+;   (let ((text (format "~s" args)))
+;    (wout-word
+;     (lambda (x y)
+;      (draw-text text x y (car INFOCOLOR)))
+;     (box-width text))))
+;  '(1 2 3)))
+;
+;(def-win-cmd 'itemize
+; (draw-text (string-append "itemize:  " (format "~s" args) "\n") x y (car INFOCOLOR)))
+;
 (def-wout-cmd 'text
  (map 
   (lambda (arg)
    (wout-word
     (lambda (x y)
-     (draw-text arg x y (car INFOCOLOR)))
+;     (draw-text arg x y (car INFOCOLOR)))
+      (newline))
     (+ 10 (box-width arg))))
   (regexp-split #px" " (format "~s" args))))
 
@@ -1117,7 +1131,8 @@ Runs in constant time.
    (let ((text (string-append "unknown:  " (format "~s" args) "\n")))
     (wout-word
      (lambda (x y)
-      (draw-text text x y (car INFOCOLOR)))
+;      (draw-text text x y (car INFOCOLOR)))
+      (newline))
      (box-width text))))
   '(1)))
 

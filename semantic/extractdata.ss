@@ -5,8 +5,10 @@
 
 (provide Thecanvas Info paint-info)
 
-(define FILENAME "graph.ss")
-(define GRFILE "data")
+(define FILENAME "extractdata.ss")
+(define GRFILE "data2")
+
+(define NEWCODE #f)
 
 (define X 0)
 (define Y 0)
@@ -43,43 +45,30 @@
     (cons id (map idify code))
     (cons id code)))))
 
-;(define G
-; (graph
-;  '()
-;  (extract
-;   (idify
-;    (call-with-input-file FILENAME
-;     (lambda (f)
-;      (read-accept-reader #t)
-;      (define (in rem)
-;       (let ((x (read rem)))
-;        (if (eof-object? x)
-;         '(end)
-;         (cons x (in rem)))))
-;      (in f)))))))
-
 (define G
- (call-with-input-file GRFILE (lambda (f) (read f))))
+ (if NEWCODE
+  (graph
+   '()
+   (extract
+    (idify
+     (call-with-input-file FILENAME
+      (lambda (f)
+       (read-accept-reader #t)
+       (define (in rem)
+        (let ((x (read rem)))
+         (if (eof-object? x)
+          '(end)
+          (cons x (in rem)))))
+       (in f))))))
+  (call-with-input-file GRFILE (lambda (f) (read f)))))
 
-(define (get-rep id child-fun)
- (cons id (get-written id child-fun)))
 
-(define (get-written id child-fun)
- (let ((nbhd (graph-neighborhood-edge-forward G id "is written")))
-  (if (null? nbhd)
-   (get-written (caar (child-fun (cons id '()))) child-fun)
-   (triple-end (car nbhd)))))
 
 (display (graph->string G))
-;(call-with-output-file GRFILE #:exists 'truncate (lambda (f) (write G f)))
+(if NEWCODE
+ (call-with-output-file GRFILE #:exists 'truncate (lambda (f) (write G f)))
+ '())
 
-(define child-fun (lambda (a) (
- (compose
-  (curry map (compose (curryr get-rep child-fun) triple-end))
-  (compose
-   (curryr (curry graph-neighborhood-edge-forward G) "has child")
-   car))
-  a)))
 
 (define (root->list root child-fun)
  (if (null? (cdr root))
@@ -87,9 +76,48 @@
   (format "~s" (cdr root))))
 
 
-(let ((id (triple-start (car (graph-edges G)))))
-; (display (root->list (cons id '()) child-fun))
-; (newline)
- (display-on-screen 0 30 (round (/ WIDTH 2)) (- HEIGHT 30) (cons id '())
+(letrec
+ ((id (triple-start (car (graph-edges G))))
+  (child-fun
+   (lambda (a)
+    (let
+     ((get-rep
+       (lambda (id child-fun)
+        (letrec
+         ((get-written
+           (lambda (id child-fun)
+            (let ((nbhd (graph-neighborhood-edge-forward G id "is written")))
+             (if (null? nbhd)
+              (get-written (caar (child-fun (cons id '()))) child-fun)
+              (triple-end (car nbhd)))))))
+         (cons id (get-written id child-fun))))))
+     ((compose
+       (curry map (compose (curryr get-rep child-fun) triple-end))
+       (compose
+        (curryr (curry graph-neighborhood-edge-forward G) "has child")
+        car))
+      a)))))
+ (display-on-screen 0 30 WIDTH (- HEIGHT 30) (cons id '())
   child-fun))
 
+(define id (triple-start (car (graph-edges G))))
+
+;(define (child-fun a)
+; (define (get-rep id child-fun)
+;  (define (get-written id child-fun)
+;   (let ((nbhd (graph-neighborhood-edge-forward G id "is written")))
+;    (if (null? nbhd)
+;     (get-written (caar (child-fun (cons id '()))) child-fun)
+;     (triple-end (car nbhd)))))
+;  (cons id (get-written id child-fun)))
+; ((compose
+;   (curry map (compose (curryr get-rep child-fun) triple-end))
+;   (compose
+;    (curryr (curry graph-neighborhood-edge-forward G) "has child")
+;    car))
+;  a))
+
+;(display-on-screen 0 30 WIDTH (- HEIGHT 30) (cons id '()) child-fun)
+
+; (display (root->list (cons id '()) child-fun))
+; (newline)
