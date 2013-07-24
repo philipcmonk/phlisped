@@ -609,14 +609,67 @@ The font used for all text.  Two things are important:  the type of font, and th
   (datum->syntax stx `(letrec ,lams ,@body))))
 
 (define my-canvas%
- (class* canvas% ()
-  (inherit with-gl-context swap-gl-buffers)
+ (with
+  ((class* canvas% ()
+   (inherit with-gl-context swap-gl-buffers)
+ 
+   <def-paint-handler>
+   <def-mouse-input>
+   <def-key-input>
+ 
+   (super-instantiate () (style '(gl)))))
 
-  <def-paint-handler>
-  <def-mouse-input>
-  <def-key-input>
+  (go (dir tree)
+   (let ((new-sel (apply find-utterance (whole-tree-utterance-tree tree)
+  		 (cond
+  		  ((eq? dir 'left)
+  		   (list (+ (ess-utterance-x (whole-tree-selection tree)) -1) (ess-utterance-y (whole-tree-selection tree)) tree))
+  		  ((eq? dir 'down)
+  		   (list (ess-utterance-x (whole-tree-selection tree)) (+ (ess-utterance-y (whole-tree-selection tree)) (ess-utterance-h (whole-tree-selection tree)) 1) tree))
+  		  ((eq? dir 'up)
+  		   (list (ess-utterance-x (whole-tree-selection tree)) (+ (ess-utterance-y (whole-tree-selection tree)) -1) tree))
+  		  ((eq? dir 'right)
+  		   (list (+ (ess-utterance-x (whole-tree-selection tree)) (ess-utterance-w (whole-tree-selection tree)) 1) (ess-utterance-y (whole-tree-selection tree)) tree))))))
+   (select (if new-sel new-sel (whole-tree-selection tree)) tree))
+   (generate-utterance-tree tree)
+   (send Thecanvas on-paint))
 
-  (super-instantiate () (style '(gl)))))]
+  (open-u (u deep? tree)
+   (set-whole-tree-open! tree (set-union (whole-tree-open tree) (list->set
+  			     (if deep?
+  			      (flatten (ess-addr-deep-args (ess-utterance-addr u) (lambda (addr) #f
+                                ;(null? (ess-man-args (ess-addr-man addr)))
+                                )))
+  			      (letrec
+  			       ((lam (lambda (l)
+  				      (if (or (null? l) (ormap (lambda (x) (closed? x tree)) l))
+  				       l
+  				       (lam (flatten (map ess-addr-args l)))))))
+  			       (lam (list (ess-utterance-addr u))))))))
+    (generate-utterance-tree tree)
+    (send Thecanvas on-paint))
+
+   (close-u (u deep? tree)
+    (set-whole-tree-open! tree (set-subtract (whole-tree-open tree) (list->set
+   				(if deep?
+   				 (let ((remnant (if (closed? (ess-utterance-addr u) tree) (ess-utterance-parent u tree) u)))
+   				  (select remnant tree)
+   				  (flatten (ess-addr-deep-args (ess-utterance-addr remnant) (curryr closed? tree))))
+   				 (if (closed? (ess-utterance-addr u) tree)
+   				  (begin
+   				   (select (ess-utterance-parent u tree) tree)
+   				   (flatten (ess-addr-deep-args (ess-utterance-addr (ess-utterance-parent u tree)) (curryr closed? tree))))
+   				  (letrec
+   				   ((lam (lambda (l)
+   					  (if (andmap
+   					       (lambda (x) (or (closed? x tree) (null? (ess-addr-args x))))
+   					       (flatten (map ess-addr-args l)))
+   					   l
+   					   (lam (flatten (map ess-addr-args l)))))))
+   				   (lam (list (ess-utterance-addr u)))))))))
+    (generate-utterance-tree tree)
+    (send Thecanvas on-paint))
+  ))]
 
 The racket side of the openGL canvas.  Handles painting and mouse/keyboard input.
 
@@ -829,66 +882,21 @@ Runs in constant time (I believe; it may run in linear time relative to the leng
 @subsection{Selection functions}
 
 @chunk[<def-go>
-(define (go dir tree)
- (let ((new-sel (apply find-utterance (whole-tree-utterance-tree tree)
-		 (cond
-		  ((eq? dir 'left)
-		   (list (+ (ess-utterance-x (whole-tree-selection tree)) -1) (ess-utterance-y (whole-tree-selection tree)) tree))
-		  ((eq? dir 'down)
-		   (list (ess-utterance-x (whole-tree-selection tree)) (+ (ess-utterance-y (whole-tree-selection tree)) (ess-utterance-h (whole-tree-selection tree)) 1) tree))
-		  ((eq? dir 'up)
-		   (list (ess-utterance-x (whole-tree-selection tree)) (+ (ess-utterance-y (whole-tree-selection tree)) -1) tree))
-		  ((eq? dir 'right)
-		   (list (+ (ess-utterance-x (whole-tree-selection tree)) (ess-utterance-w (whole-tree-selection tree)) 1) (ess-utterance-y (whole-tree-selection tree)) tree))))))
- (select (if new-sel new-sel (whole-tree-selection tree)) tree))
- (generate-utterance-tree tree)
- (send Thecanvas on-paint))]
+'()]
 
 Changes the selection in the direction of @racket[dir], which may be one of @racket['left], @racket['down], @racket['up], and @racket['right].  Calls @racket[select] to actually set the variable.  Regenerates the utterance tree.
 
 Runs in the computational complexity of @racket[generate-utterance-tree].
 
 @chunk[<def-open-u>
-(define (open-u u deep? tree)
- (set-whole-tree-open! tree (set-union (whole-tree-open tree) (list->set
-			     (if deep?
-			      (flatten (ess-addr-deep-args (ess-utterance-addr u) (lambda (addr) #f
-                              ;(null? (ess-man-args (ess-addr-man addr)))
-                              )))
-			      (letrec
-			       ((lam (lambda (l)
-				      (if (or (null? l) (ormap (lambda (x) (closed? x tree)) l))
-				       l
-				       (lam (flatten (map ess-addr-args l)))))))
-			       (lam (list (ess-utterance-addr u))))))))
-  (generate-utterance-tree tree)
-  (send Thecanvas on-paint))]
+'()]
 
 Opens the ess-utterance.  If @racket[deep?], then opens all descendants down to the next code level.  If not @racket[deep?], its immediate children are opened.  If these are already open, then the next level is opened, etc.  This was particularly late night coding -- don't ask me how the code works.  Regenerates the utterance tree.
 
 Runs in the computational complexity of @racket[generate-utterance-tree] except in cases where very large ess-utterances are being opened, when it may run in linear time relative to the number of already-open descendants (although I suspect it is always dominated by @racket[generate-utterance-tree]).
 
 @chunk[<def-close-u>
-(define (close-u u deep? tree)
- (set-whole-tree-open! tree (set-subtract (whole-tree-open tree) (list->set
-				(if deep?
-				 (let ((remnant (if (closed? (ess-utterance-addr u) tree) (ess-utterance-parent u tree) u)))
-				  (select remnant tree)
-				  (flatten (ess-addr-deep-args (ess-utterance-addr remnant) (curryr closed? tree))))
-				 (if (closed? (ess-utterance-addr u) tree)
-				  (begin
-				   (select (ess-utterance-parent u tree) tree)
-				   (flatten (ess-addr-deep-args (ess-utterance-addr (ess-utterance-parent u tree)) (curryr closed? tree))))
-				  (letrec
-				   ((lam (lambda (l)
-					  (if (andmap
-					       (lambda (x) (or (closed? x tree) (null? (ess-addr-args x))))
-					       (flatten (map ess-addr-args l)))
-					   l
-					   (lam (flatten (map ess-addr-args l)))))))
-				   (lam (list (ess-utterance-addr u)))))))))
- (generate-utterance-tree tree)
- (send Thecanvas on-paint))]
+'()]
 
 Closes the ess-utterance.  If @racket[deep?], then closes all descendants.  If not @racket[deep?], then close only the deepest layer.  In either case, if all descendants are already closed, then closes the parent and selects the parent.  Regenerates the utterance tree.
 
