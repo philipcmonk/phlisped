@@ -601,6 +601,13 @@ The font used for all text.  Two things are important:  the type of font, and th
 
 <def-syntax-mouse-handler>
 
+(define-syntax (with stx)
+ (let* ((l (syntax->datum stx))
+        (body (cadr l))
+        (defs (cddr l))
+        (lams (map (lambda (def) `(,(car def) (lambda ,(cadr def) ,@(cddr def)))) defs)))
+  (datum->syntax stx `(letrec ,lams ,@body))))
+
 (define my-canvas%
  (class* canvas% ()
   (inherit with-gl-context swap-gl-buffers)
@@ -617,88 +624,92 @@ The racket side of the openGL canvas.  Handles painting and mouse/keyboard input
 
 @chunk[<def-paint-handler>
   (define/override (on-paint)
-   (define (paint-tree tree)
-    (define (ess-utterance-paint u tree)
-     (define (invisible? x y w h tree)
-      (or
-       (and (< (+ x w) (- (whole-tree-offset-x tree))) (not VERTICAL))
-       (and (< (+ y h) (- (whole-tree-offset-y tree))) VERTICAL)
-       (> x (- (/ (whole-tree-w tree) (whole-tree-zoom tree)) (whole-tree-offset-x tree)))
-       (> y (- (/ (whole-tree-h tree) (whole-tree-zoom tree)) (whole-tree-offset-y tree)))))
+   (with
+    ((with-gl-context
+      (lambda ()
+       (gl-clear-color 0.0 0.0 0.0 0.0)
+       (gl-clear 'color-buffer-bit)
+ 
+       (gl-enable 'scissor-test)
+ 
+       (for-each paint-tree Trees)
+ 
+       (gl-disable 'scissor-test)
+       (paint-info Info #f)
+       (swap-gl-buffers))))
 
-     (define (center offset lenwhole lenpiece start width)
-      (let ((visible-width (- (min (+ offset lenwhole) (+ start width)) (max offset start))))
-       (if (< visible-width lenpiece)
-        (if (< offset start)
-         (- (+ offset lenwhole) lenpiece)
-         offset)
-        (+ (max offset start) (/ visible-width 2) (- (/ lenpiece 2))))))
+    (paint-tree (tree)
+     (with
+      ((apply gl-scissor (whole-tree-dim tree))
+       (apply gl-viewport (whole-tree-dim tree))
+       (gl-matrix-mode 'projection)
+       (gl-load-identity)
+       (gl-ortho
+        (- (whole-tree-offset-x tree))
+        (+ (- (whole-tree-offset-x tree)) (/ (whole-tree-w tree) (whole-tree-zoom tree)))
+        (+ (whole-tree-offset-y tree) (- (/ (whole-tree-h tree) (whole-tree-zoom tree))))
+        (whole-tree-offset-y tree)
+        -1.0
+        1.0)
+       (gl-matrix-mode 'modelview)
+       (gl-load-identity)
+       (ess-utterance-paint (whole-tree-utterance-tree tree) tree))
 
-     (define (draw-rectangle clr x y w h)
-      (gl-color (/ (car clr) 255) (/ (cadr clr) 255) (/ (caddr clr) 255))
-    
-      (gl-begin 'quads)
-      (gl-vertex x (- y))
-      (gl-vertex (+ x w) (- y))
-      (gl-vertex (+ x w) (- (+ y h)))
-      (gl-vertex x (- (+ y h)))
-      (gl-end))
+      (ess-utterance-paint (u tree)
+       (with
+        ((let* ((text (ess-man-text (ess-addr-man (ess-utterance-addr u))))
+                (x (ess-utterance-x u))
+                (y (ess-utterance-y u))
+                (w (ess-utterance-w u))
+                (h (ess-utterance-h u))
+                (text-w (ess-utterance-text-w u))
+                (text-h (ess-utterance-text-h u))
+                (args (ess-utterance-args u))
+                (clr (ess-utterance-clr u)))
+          (if (invisible? x y w h tree)
+           '()
+           (begin
+            (draw-rectangle (if (eq? Selected-tree tree) (cdr clr) (map (curryr / 3) (cdr clr))) x y w h)
+            (if (< (whole-tree-zoom tree) 1) '()
+             (draw-text
+              text
+              (* (whole-tree-zoom tree) (center x w text-w (- (whole-tree-offset-x tree)) (whole-tree-w tree)))
+              (* (whole-tree-zoom tree) (+ text-h -3 (center y h text-h (- (whole-tree-offset-y tree)) (whole-tree-h tree))))
+              (car clr)
+              tree))
+            (for-each (lambda (arg) (ess-utterance-paint arg tree)) args)))))
 
-     (define (draw-text text x y clr tree)
-      (gl-color (/ (car clr) 255) (/ (cadr clr) 255) (/ (caddr clr) 255))
-      (gl-raster-pos (- 1 (whole-tree-offset-x tree)) (- (whole-tree-offset-y tree) 1))
-      (glBitmap 0 0 0 0 (+ x (whole-tree-offset-x tree)) (- (+ y (whole-tree-offset-y tree))) (make-cvector _uint8 1))
-      (ftglRenderFont Font text 65535))
-
-     (let* ((text (ess-man-text (ess-addr-man (ess-utterance-addr u))))
-            (x (ess-utterance-x u))
-            (y (ess-utterance-y u))
-            (w (ess-utterance-w u))
-            (h (ess-utterance-h u))
-            (text-w (ess-utterance-text-w u))
-            (text-h (ess-utterance-text-h u))
-            (args (ess-utterance-args u))
-            (clr (ess-utterance-clr u)))
-      (if (invisible? x y w h tree)
-       '()
-       (begin
-        (draw-rectangle (if (eq? Selected-tree tree) (cdr clr) (map (curryr / 3) (cdr clr))) x y w h)
-        (if (< (whole-tree-zoom tree) 1) '()
-         (draw-text
-          text
-          (* (whole-tree-zoom tree) (center x w text-w (- (whole-tree-offset-x tree)) (whole-tree-w tree)))
-          (* (whole-tree-zoom tree) (+ text-h -3 (center y h text-h (- (whole-tree-offset-y tree)) (whole-tree-h tree))))
-          (car clr)
-          tree))
-        (for-each (lambda (arg) (ess-utterance-paint arg tree)) args)))))
-
-    (apply gl-scissor (whole-tree-dim tree))
-    (apply gl-viewport (whole-tree-dim tree))
-    (gl-matrix-mode 'projection)
-    (gl-load-identity)
-    (gl-ortho
-     (- (whole-tree-offset-x tree))
-     (+ (- (whole-tree-offset-x tree)) (/ (whole-tree-w tree) (whole-tree-zoom tree)))
-     (+ (whole-tree-offset-y tree) (- (/ (whole-tree-h tree) (whole-tree-zoom tree))))
-     (whole-tree-offset-y tree)
-     -1.0
-     1.0)
-    (gl-matrix-mode 'modelview)
-    (gl-load-identity)
-    (ess-utterance-paint (whole-tree-utterance-tree tree) tree))
-
-   (with-gl-context
-    (lambda ()
-     (gl-clear-color 0.0 0.0 0.0 0.0)
-     (gl-clear 'color-buffer-bit)
-
-     (gl-enable 'scissor-test)
-
-     (for-each paint-tree Trees)
-
-     (gl-disable 'scissor-test)
-     (paint-info Info #f)
-     (swap-gl-buffers))))]
+       (invisible? (x y w h tree)
+        (or
+         (and (< (+ x w) (- (whole-tree-offset-x tree))) (not VERTICAL))
+         (and (< (+ y h) (- (whole-tree-offset-y tree))) VERTICAL)
+         (> x (- (/ (whole-tree-w tree) (whole-tree-zoom tree)) (whole-tree-offset-x tree)))
+         (> y (- (/ (whole-tree-h tree) (whole-tree-zoom tree)) (whole-tree-offset-y tree)))))
+  
+       (center (offset lenwhole lenpiece start width)
+        (let ((visible-width (- (min (+ offset lenwhole) (+ start width)) (max offset start))))
+         (if (< visible-width lenpiece)
+          (if (< offset start)
+           (- (+ offset lenwhole) lenpiece)
+           offset)
+          (+ (max offset start) (/ visible-width 2) (- (/ lenpiece 2))))))
+  
+       (draw-rectangle (clr x y w h)
+        (gl-color (/ (car clr) 255) (/ (cadr clr) 255) (/ (caddr clr) 255))
+      
+        (gl-begin 'quads)
+        (gl-vertex x (- y))
+        (gl-vertex (+ x w) (- y))
+        (gl-vertex (+ x w) (- (+ y h)))
+        (gl-vertex x (- (+ y h)))
+        (gl-end))
+  
+       (draw-text (text x y clr tree)
+        (gl-color (/ (car clr) 255) (/ (cadr clr) 255) (/ (caddr clr) 255))
+        (gl-raster-pos (- 1 (whole-tree-offset-x tree)) (- (whole-tree-offset-y tree) 1))
+        (glBitmap 0 0 0 0 (+ x (whole-tree-offset-x tree)) (- (+ y (whole-tree-offset-y tree))) (make-cvector _uint8 1))
+        (ftglRenderFont Font text 65535))))))))
+]
 
 Resets the openGL buffer, sets the view, and calls @racket[ess-utterance-paint] with @racket[Utterance-tree].
 
