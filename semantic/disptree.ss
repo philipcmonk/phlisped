@@ -321,41 +321,60 @@ Runs in constant time (remember that it does not eagerly generate children).
 
 @chunk[<def-ess-addr->ess-utterance>
 (define (ess-addr->ess-utterance addr x y w row siblings tree)
- (let ((children 
-	(if (closed? addr tree)
-	 '()
-	 (let ((child-w (if VERTICAL (foldl max 0 (map (lambda (arg) (ess-addr-width arg tree)) (ess-addr-args addr))) -1)))
-	  (caddr
-	   (foldl
-	    (lambda (arg data)
-	     (let ((res (ess-addr->ess-utterance
-			 arg
-			 (if VERTICAL (+ (car data) w) (car data))
-			 (if VERTICAL (cadr data) (+ (cadr data) (ess-addr-height arg tree)))
-			 child-w
-			 (+ 1 row)
-			 (- (length (ess-addr-args addr)) 1)
-                         tree)))
-	      (list
-	       (if VERTICAL (car data) (+ (car data) (ess-utterance-w res)))
-	       (if VERTICAL (+ (cadr data) (ess-addr-height arg tree)) (cadr data))
-	       (if (null? res)
-		(caddr data)
-		(append
-		 (caddr data)
-		 (list res))))))
-	    (list x y '())
-	    (ess-addr-args addr)))))))
-  (ess-utterance
-   addr
-   x
-   y
-   (if VERTICAL w (max (box-width (ess-man-text (ess-addr-man addr))) (apply + (map ess-utterance-w children))))
-   (ess-addr-height addr tree)
-   (box-width (ess-man-text (ess-addr-man addr)))
-   (box-height (ess-man-text (ess-addr-man addr)))
-   children
-   (get-color addr siblings))))]
+ (with
+  ((let ((children 
+  	(if (closed? addr tree)
+  	 '()
+  	 (let ((child-w (if VERTICAL (foldl max 0 (map (lambda (arg) (ess-addr-width arg tree)) (ess-addr-args addr))) -1)))
+  	  (caddr
+  	   (foldl
+  	    (lambda (arg data)
+  	     (let ((res (ess-addr->ess-utterance
+  			 arg
+  			 (if VERTICAL (+ (car data) w) (car data))
+  			 (if VERTICAL (cadr data) (+ (cadr data) (ess-addr-height arg tree)))
+  			 child-w
+  			 (+ 1 row)
+  			 (- (length (ess-addr-args addr)) 1)
+                           tree)))
+  	      (list
+  	       (if VERTICAL (car data) (+ (car data) (ess-utterance-w res)))
+  	       (if VERTICAL (+ (cadr data) (ess-addr-height arg tree)) (cadr data))
+  	       (if (null? res)
+  		(caddr data)
+  		(append
+  		 (caddr data)
+  		 (list res))))))
+  	    (list x y '())
+  	    (ess-addr-args addr)))))))
+    (ess-utterance
+     addr
+     x
+     y
+     (if VERTICAL w (max (box-width (ess-man-text (ess-addr-man addr))) (apply + (map ess-utterance-w children))))
+     (ess-addr-height addr tree)
+     (box-width (ess-man-text (ess-addr-man addr)))
+     (box-height (ess-man-text (ess-addr-man addr)))
+     children
+     (get-color addr siblings))))
+
+  (get-color (addr siblings)
+   (if (eq? addr (ess-utterance-addr (whole-tree-selection Selected-tree)))
+    SELCOLOR
+    (if (eq? COLORSCHEME 'gradient)
+     (let* ((pos (if (null? (ess-addr-laddr addr)) 0 (last (ess-addr-laddr addr))))
+  	  (diff (/ pos (if (zero? siblings) 1 siblings)))
+  	  (col (map + INITIALCOLOR (map round (map * (make-list 3 diff) COLORRANGES)))))
+      (if #f ;(null? (ess-man-args (ess-addr-man addr)))
+       CODECOLOR1
+       (cons (apply make-object color% FGCOLOR) (apply make-object color% col))))
+     (let* ((row (length (ess-addr-laddr addr)))
+  	  (col (if (null? (ess-addr-laddr addr)) 0 (last (ess-addr-laddr addr)))))
+      (if #f ;(null? (ess-man-args (ess-addr-man addr)))
+       (if (zero? col) CODECOLOR3 (if (odd? col) CODECOLOR1 CODECOLOR2))
+       (if (odd? row)
+        (if (zero? col) COLOR5 (if (odd? col) COLOR1 COLOR2))
+        (if (zero? col) COLOR6 (if (odd? col) COLOR3 COLOR4))))))))))]
 
 Converts an ess-address to an ess-utterance.
 
@@ -968,23 +987,7 @@ Returns true if we are using a color scheme that requires a border.
 Runs in constant time.
 
 @chunk[<def-get-color>
-(define (get-color addr siblings)
- (if (eq? addr (ess-utterance-addr (whole-tree-selection Selected-tree)))
-  SELCOLOR
-  (if (eq? COLORSCHEME 'gradient)
-   (let* ((pos (if (null? (ess-addr-laddr addr)) 0 (last (ess-addr-laddr addr))))
-	  (diff (/ pos (if (zero? siblings) 1 siblings)))
-	  (col (map + INITIALCOLOR (map round (map * (make-list 3 diff) COLORRANGES)))))
-    (if #f ;(null? (ess-man-args (ess-addr-man addr)))
-     CODECOLOR1
-     (cons (apply make-object color% FGCOLOR) (apply make-object color% col))))
-   (let* ((row (length (ess-addr-laddr addr)))
-	  (col (if (null? (ess-addr-laddr addr)) 0 (last (ess-addr-laddr addr)))))
-    (if #f ;(null? (ess-man-args (ess-addr-man addr)))
-     (if (zero? col) CODECOLOR3 (if (odd? col) CODECOLOR1 CODECOLOR2))
-     (if (odd? row)
-      (if (zero? col) COLOR5 (if (odd? col) COLOR1 COLOR2))
-      (if (zero? col) COLOR6 (if (odd? col) COLOR3 COLOR4))))))))]
+'()]
 
 @racket[addr] is an ess-address, and @racket[siblings] is the number of siblings it has.  This returns the color of this ess-address, as determined by @racket[COLORSCHEME].
 
