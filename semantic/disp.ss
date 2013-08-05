@@ -21,16 +21,16 @@
 (define-ftgl ftglRenderFont (_fun _FTGLfont _string _int -> _void))
 (define-ftgl ftglDestroyFont (_fun _FTGLfont -> _void))
 
-(provide my-canvas% box-width box-height box-maj-dim ess-addr-width ess-addr-height ess-addr-maj-dim VERTICAL ess-man-text display-on-screen Thecanvas Info)
+(provide my-canvas% box-width box-height box-maj-dim node-width node-height node-maj-dim VERTICAL display-on-screen Thecanvas Info)
 
-(struct ess-addr (man laddr prom-args))
-(struct ess-utterance (addr x y w h text-w text-h args clr))
-(struct whole-tree (addr-tree childfunc utterance-tree open selection x y w h offset-x offset-y zoom) #:mutable)
+(struct node (data laddr prom-args text-func))
+(struct utterance (n x y w h text-w text-h args clr))
+(struct whole-tree (n-tree childfunc utterance-tree open selection x y w h offset-x offset-y zoom) #:mutable)
 
 (define Trees (list (apply whole-tree 
-  (let* ((dummy-addr (ess-addr '(0 . "") '() (delay '())))
-         (dummy-utterance (ess-utterance dummy-addr 0 0 0 0 0 0 '() (cons '(0 0 0) '(0 0 0)))))
-   (list dummy-addr (lambda (a) '()) dummy-utterance (set) dummy-utterance 0 0 0 0 0 0 1)))))
+  (let* ((dummy-n (node '(0 . "") '() (delay '()) (lambda (_) "t")))
+         (dummy-utterance (utterance dummy-n 0 0 0 0 0 0 '() (cons '(0 0 0) '(0 0 0)))))
+   (list dummy-n (lambda (a) '()) dummy-utterance (set) dummy-utterance 0 0 0 0 0 0 1)))))
 (define Selected-tree (car Trees))
 
 (define COLORSCHEME 'alternate)
@@ -56,9 +56,9 @@
 
 (define win (new frame% (label "vilisp") (min-width WIDTH) (min-height HEIGHT)))
 
-(define (open? addr tree) (set-member? (whole-tree-open tree) addr))
+(define (open? n tree) (set-member? (whole-tree-open tree) n))
 (define closed? (negate open?))
-(define ess-addr-args (compose force ess-addr-prom-args))
+(define node-args (compose force node-prom-args))
 
 (define my-canvas%
  (with
@@ -95,19 +95,19 @@
           1.0)
          (gl-matrix-mode 'modelview)
          (gl-load-identity)
-         (ess-utterance-paint (whole-tree-utterance-tree tree) tree))
+         (utterance-paint (whole-tree-utterance-tree tree) tree))
   
-        (ess-utterance-paint (u tree)
+        (utterance-paint (u tree)
          (with
-          ((let* ((text (ess-man-text (ess-addr-man (ess-utterance-addr u))))
-                  (x (ess-utterance-x u))
-                  (y (ess-utterance-y u))
-                  (w (ess-utterance-w u))
-                  (h (ess-utterance-h u))
-                  (text-w (ess-utterance-text-w u))
-                  (text-h (ess-utterance-text-h u))
-                  (args (ess-utterance-args u))
-                  (clr (ess-utterance-clr u)))
+          ((let* ((text ((node-text-func (utterance-n u)) (utterance-n u)))
+                  (x (utterance-x u))
+                  (y (utterance-y u))
+                  (w (utterance-w u))
+                  (h (utterance-h u))
+                  (text-w (utterance-text-w u))
+                  (text-h (utterance-text-h u))
+                  (args (utterance-args u))
+                  (clr (utterance-clr u)))
             (if (invisible? x y w h tree)
              '()
              (begin
@@ -119,7 +119,7 @@
                 (* (whole-tree-zoom tree) (+ text-h -3 (center y h text-h (- (whole-tree-offset-y tree)) (whole-tree-h tree))))
                 (car clr)
                 tree))
-              (for-each (lambda (arg) (ess-utterance-paint arg tree)) args)))))
+              (for-each (lambda (arg) (utterance-paint arg tree)) args)))))
   
          (invisible? (x y w h tree)
           (or
@@ -164,7 +164,7 @@
  	(send this on-paint)))))
      ((eq? (send event get-event-type) 'motion)
       (define-mouse-handler (clicked)
-       (let ((text (format "~s" (ess-addr-man (ess-utterance-addr clicked)))))
+       (let ((text (format "~s" (node-data (utterance-n clicked)))))
         (if (equal? Info text)
          '()
          (begin
@@ -196,14 +196,14 @@
      ((eq? (send event get-key-code) #\F)
       (begin (set! COLORSCHEME (if (eq? COLORSCHEME 'gradient) 'alternate 'gradient)) (generate-utterance-tree Selected-tree) (send this on-paint)))
      ((eq? (send event get-key-code) #\n)
-      (add-to-screen (ess-addr-man (ess-utterance-addr (whole-tree-selection Selected-tree))) (whole-tree-childfunc Selected-tree))
+      (add-to-screen (node-data (utterance-n (whole-tree-selection Selected-tree))) (whole-tree-childfunc Selected-tree))
       (generate-utterance-tree Selected-tree)
       (send this on-paint))
      ((eq? (send event get-key-code) #\N)
       (let* ((tree (cadr Trees))
-             (addr (root->ess-addr (ess-addr-man (ess-utterance-addr (whole-tree-selection Selected-tree))) (whole-tree-childfunc tree) '())))
-       (set-whole-tree-addr-tree! tree addr)
-       (set-whole-tree-utterance-tree! tree (ess-addr->ess-utterance (whole-tree-addr-tree tree) 0 0 0 0 '() tree))
+             (n (root->node (node-data (utterance-n (whole-tree-selection Selected-tree))) (whole-tree-childfunc tree) '())))
+       (set-whole-tree-n-tree! tree n)
+       (set-whole-tree-utterance-tree! tree (node->utterance (whole-tree-n-tree tree) 0 0 0 0 '() tree))
        (set-whole-tree-selection! tree (whole-tree-utterance-tree tree))
        (set-whole-tree-offset-x! tree 0)
        (set-whole-tree-offset-y! tree 0)
@@ -255,9 +255,9 @@
      ((eq? (send event get-key-code) #\C)
       (close-u (whole-tree-selection Selected-tree) #t Selected-tree))
      ((eq? (send event get-key-code) #\z)
-      (set-whole-tree-offset-x! Selected-tree (- (ess-utterance-y (whole-tree-selection Selected-tree))))
-      (set-whole-tree-offset-y! Selected-tree (- (ess-utterance-x (whole-tree-selection Selected-tree))))
-      (set-whole-tree-zoom! Selected-tree (if (= (whole-tree-zoom Selected-tree) 1) (if VERTICAL (/ (whole-tree-h Selected-tree) (ess-utterance-h (whole-tree-selection Selected-tree))) (/ (whole-tree-w Selected-tree) (ess-utterance-w (whole-tree-selection Selected-tree) ))) 1))
+      (set-whole-tree-offset-x! Selected-tree (- (utterance-y (whole-tree-selection Selected-tree))))
+      (set-whole-tree-offset-y! Selected-tree (- (utterance-x (whole-tree-selection Selected-tree))))
+      (set-whole-tree-zoom! Selected-tree (if (= (whole-tree-zoom Selected-tree) 1) (if VERTICAL (/ (whole-tree-h Selected-tree) (utterance-h (whole-tree-selection Selected-tree))) (/ (whole-tree-w Selected-tree) (utterance-w (whole-tree-selection Selected-tree) ))) 1))
       (send this on-paint))
      ((eq? (send event get-key-code) 'wheel-up)
       (if VERTICAL
@@ -286,13 +286,13 @@
    (let ((new-sel (apply find-utterance (whole-tree-utterance-tree tree)
   		 (cond
   		  ((eq? dir 'left)
-  		   (list (+ (ess-utterance-x (whole-tree-selection tree)) -1) (ess-utterance-y (whole-tree-selection tree)) tree))
+  		   (list (+ (utterance-x (whole-tree-selection tree)) -1) (utterance-y (whole-tree-selection tree)) tree))
   		  ((eq? dir 'down)
-  		   (list (ess-utterance-x (whole-tree-selection tree)) (+ (ess-utterance-y (whole-tree-selection tree)) (ess-utterance-h (whole-tree-selection tree)) 1) tree))
+  		   (list (utterance-x (whole-tree-selection tree)) (+ (utterance-y (whole-tree-selection tree)) (utterance-h (whole-tree-selection tree)) 1) tree))
   		  ((eq? dir 'up)
-  		   (list (ess-utterance-x (whole-tree-selection tree)) (+ (ess-utterance-y (whole-tree-selection tree)) -1) tree))
+  		   (list (utterance-x (whole-tree-selection tree)) (+ (utterance-y (whole-tree-selection tree)) -1) tree))
   		  ((eq? dir 'right)
-  		   (list (+ (ess-utterance-x (whole-tree-selection tree)) (ess-utterance-w (whole-tree-selection tree)) 1) (ess-utterance-y (whole-tree-selection tree)) tree))))))
+  		   (list (+ (utterance-x (whole-tree-selection tree)) (utterance-w (whole-tree-selection tree)) 1) (utterance-y (whole-tree-selection tree)) tree))))))
    (select (if new-sel new-sel (whole-tree-selection tree)) tree))
    (generate-utterance-tree tree)
    (send Thecanvas on-paint))
@@ -300,42 +300,42 @@
   (open-u (u deep? tree)
    (set-whole-tree-open! tree (set-union (whole-tree-open tree) (list->set
   			     (if deep?
-  			      (flatten (ess-addr-deep-args (ess-utterance-addr u) (lambda (addr) #f
-                                ;(null? (ess-man-args (ess-addr-man addr)))
+  			      (flatten (node-deep-args (utterance-n u) (lambda (n) #f
+                                ;(null? (ess-man-args (node-man n)))
                                 )))
   			      (letrec
   			       ((lam (lambda (l)
   				      (if (or (null? l) (ormap (lambda (x) (closed? x tree)) l))
   				       l
-  				       (lam (flatten (map ess-addr-args l)))))))
-  			       (lam (list (ess-utterance-addr u))))))))
+  				       (lam (flatten (map node-args l)))))))
+  			       (lam (list (utterance-n u))))))))
     (generate-utterance-tree tree)
     (send Thecanvas on-paint))
 
    (close-u (u deep? tree)
     (set-whole-tree-open! tree (set-subtract (whole-tree-open tree) (list->set
    				(if deep?
-   				 (let ((remnant (if (closed? (ess-utterance-addr u) tree) (ess-utterance-parent u tree) u)))
+   				 (let ((remnant (if (closed? (utterance-n u) tree) (utterance-parent u tree) u)))
    				  (select remnant tree)
-   				  (flatten (ess-addr-deep-args (ess-utterance-addr remnant) (curryr closed? tree))))
-   				 (if (closed? (ess-utterance-addr u) tree)
+   				  (flatten (node-deep-args (utterance-n remnant) (curryr closed? tree))))
+   				 (if (closed? (utterance-n u) tree)
    				  (begin
-   				   (select (ess-utterance-parent u tree) tree)
-   				   (flatten (ess-addr-deep-args (ess-utterance-addr (ess-utterance-parent u tree)) (curryr closed? tree))))
+   				   (select (utterance-parent u tree) tree)
+   				   (flatten (node-deep-args (utterance-n (utterance-parent u tree)) (curryr closed? tree))))
    				  (letrec
    				   ((lam (lambda (l)
    					  (if (andmap
-   					       (lambda (x) (or (closed? x tree) (null? (ess-addr-args x))))
-   					       (flatten (map ess-addr-args l)))
+   					       (lambda (x) (or (closed? x tree) (null? (node-args x))))
+   					       (flatten (map node-args l)))
    					   l
-   					   (lam (flatten (map ess-addr-args l)))))))
-   				   (lam (list (ess-utterance-addr u)))))))))
+   					   (lam (flatten (map node-args l)))))))
+   				   (lam (list (utterance-n u)))))))))
     (generate-utterance-tree tree)
     (send Thecanvas on-paint))
 
 
-   (ess-addr-deep-args (addr pred)
-    (cons addr (if (pred addr) '() (map (lambda (a) (ess-addr-deep-args a pred)) (ess-addr-args addr)))))
+   (node-deep-args (n pred)
+    (cons n (if (pred n) '() (map (lambda (a) (node-deep-args a pred)) (node-args n)))))
 
    (paint-info (text swap)
     (gl-enable 'scissor-test)
@@ -357,22 +357,22 @@
    (select (u tree)
     (set! Selected-tree tree)
     (set-whole-tree-selection! tree u)
-    (let ((x (+ (whole-tree-offset-x tree) (ess-utterance-x u)))
-          (y (+ (whole-tree-offset-y tree) (ess-utterance-y u)))
-          (w (ess-utterance-w u))
-          (h (ess-utterance-h u)))
+    (let ((x (+ (whole-tree-offset-x tree) (utterance-x u)))
+          (y (+ (whole-tree-offset-y tree) (utterance-y u)))
+          (w (utterance-w u))
+          (h (utterance-h u)))
      (if
       (or
        (and (negative? (+ x w)) (not VERTICAL))
        (> x (/ (whole-tree-w tree) (whole-tree-zoom tree))))
-      (let ((c (+ (ess-utterance-x u) (/ w 2))))
+      (let ((c (+ (utterance-x u) (/ w 2))))
        (set-whole-tree-offset-x! tree (- (+ c (- (/ (whole-tree-w tree) (whole-tree-zoom tree) 2))))))
       '())
      (if
       (or
        (and (negative? (+ y h)) VERTICAL)
        (> y (/ (whole-tree-h tree) (whole-tree-zoom tree))))
-      (let ((c (+ (ess-utterance-y u) (/ h 2))))
+      (let ((c (+ (utterance-y u) (/ h 2))))
        (set-whole-tree-offset-y! tree (- (+ c (- (/ (whole-tree-h tree) (whole-tree-zoom tree) 2))))))
       '())))
 
@@ -382,25 +382,25 @@
    (in? (dim x y)
     (and (> x (car dim)) (> y (cadr dim)) (< x (+ (car dim) (caddr dim))) (< y (+ (cadr dim) (cadddr dim)))))
 
-   (ess-utterance-parent (u tree)
+   (utterance-parent (u tree)
     (apply find-utterance (whole-tree-utterance-tree tree)
      (if VERTICAL
-      (list (+ (ess-utterance-x u) -1) (ess-utterance-y u) tree)
-      (list (ess-utterance-x u) (+ (ess-utterance-y u) -1) tree))))
+      (list (+ (utterance-x u) -1) (utterance-y u) tree)
+      (list (utterance-x u) (+ (utterance-y u) -1) tree))))
    
    (find-utterance (root x y tree)
     (if (or
-         (< (min-dim x y) (+ (ess-utterance-min-dim root) (ess-utterance-min-dim-span root)))
-         (closed? (ess-utterance-addr root) tree)
-         (null? (ess-addr-args (ess-utterance-addr root)))
-         (> (maj-dim x y) (let ((baby (last (ess-utterance-args root)))) (+ (ess-utterance-maj-dim baby) (ess-utterance-maj-dim-span baby)))))
+         (< (min-dim x y) (+ (utterance-min-dim root) (utterance-min-dim-span root)))
+         (closed? (utterance-n root) tree)
+         (null? (node-args (utterance-n root)))
+         (> (maj-dim x y) (let ((baby (last (utterance-args root)))) (+ (utterance-maj-dim baby) (utterance-maj-dim-span baby)))))
      root
      (ormap
       (lambda (child)
-       (if (< (maj-dim x y) (+ (ess-utterance-maj-dim child) (ess-utterance-maj-dim-span child)))
+       (if (< (maj-dim x y) (+ (utterance-maj-dim child) (utterance-maj-dim-span child)))
         (find-utterance child x y tree)
         #f))
-      (ess-utterance-args root))))
+      (utterance-args root))))
   ))
 
 (define Info-dim (list 0 (- HEIGHT 30) WIDTH 30))
@@ -417,21 +417,21 @@
 (define (box-maj-dim box)
  (if VERTICAL (box-height box) (box-width box)))
 
-(define (ess-addr-width addr tree)
- (if VERTICAL (box-width (ess-man-text (ess-addr-man addr))) (ess-addr-maj-dim addr tree)))
+(define (node-width n tree)
+ (if VERTICAL (box-width ((node-text-func (node-data n)) n)) (node-maj-dim n tree)))
 
-(define (ess-addr-height addr tree)
- (if VERTICAL (ess-addr-maj-dim addr tree) CELLHEIGHT))
+(define (node-height n tree)
+ (if VERTICAL (node-maj-dim n tree) CELLHEIGHT))
 
-(define (ess-addr-maj-dim addr tree)
- (if (closed? addr tree)
-  (box-maj-dim (ess-man-text (ess-addr-man addr)))
+(define (node-maj-dim n tree)
+ (if (closed? n tree)
+  (box-maj-dim ((node-text-func (node-data n)) n))
   (max
-   (box-maj-dim (ess-man-text (ess-addr-man addr)))
+   (box-maj-dim ((node-text-func (node-data n)) n))
    (foldl
     +
     0
-    (map (lambda (arg) (ess-addr-maj-dim arg tree)) (ess-addr-args addr))))))
+    (map (lambda (arg) (node-maj-dim arg tree)) (node-args n))))))
 
 (define VERTICAL #f)
 (define Mouse-pos (cons -1 -1))
@@ -439,16 +439,16 @@
 (define SCROLLDIST 100)
 (define Thecanvas (new my-canvas% (parent win)))
 
-(define (ess-utterance-maj-dim u) (if VERTICAL (ess-utterance-y u) (ess-utterance-x u)))
-(define (ess-utterance-maj-dim-span u) (if VERTICAL (ess-utterance-h u) (ess-utterance-w u)))
-(define (ess-utterance-min-dim u) (if VERTICAL (ess-utterance-x u) (ess-utterance-y u)))
-(define (ess-utterance-min-dim-span u) (if VERTICAL (ess-utterance-w u) (ess-utterance-h u)))
+(define (utterance-maj-dim u) (if VERTICAL (utterance-y u) (utterance-x u)))
+(define (utterance-maj-dim-span u) (if VERTICAL (utterance-h u) (utterance-w u)))
+(define (utterance-min-dim u) (if VERTICAL (utterance-x u) (utterance-y u)))
+(define (utterance-min-dim-span u) (if VERTICAL (utterance-w u) (utterance-h u)))
 (define (maj-dim x y) (if VERTICAL y x))
 (define (min-dim x y) (if VERTICAL x y))
 
 
-(define (ess-man-text lst)
- (format "~s" (cdr lst)))
+;(define (ess-man-text lst)
+; (format "~s" (cdr lst)))
 
 (define (rel->gl l)
  (list (car l) (- HEIGHT (+ (cadddr l) (cadr l))) (caddr l) (cadddr l)))
@@ -456,13 +456,13 @@
 
 
 (define (generate-utterance-tree tree)
-    (set-whole-tree-utterance-tree! tree (ess-addr->ess-utterance (whole-tree-addr-tree tree) (ess-utterance-x (whole-tree-utterance-tree tree)) (ess-utterance-y (whole-tree-utterance-tree tree)) (if VERTICAL (ess-addr-width (whole-tree-addr-tree tree) tree) -1) 0 1 tree))
-    (set-whole-tree-selection! tree (find-utterance-from-laddr (whole-tree-utterance-tree tree) (ess-addr-laddr (ess-utterance-addr (whole-tree-selection tree))))))
+    (set-whole-tree-utterance-tree! tree (node->utterance (whole-tree-n-tree tree) (utterance-x (whole-tree-utterance-tree tree)) (utterance-y (whole-tree-utterance-tree tree)) (if VERTICAL (node-width (whole-tree-n-tree tree) tree) -1) 0 1 tree))
+    (set-whole-tree-selection! tree (find-utterance-from-laddr (whole-tree-utterance-tree tree) (node-laddr (utterance-n (whole-tree-selection tree))))))
 
 (define (find-utterance-from-laddr tree laddr)
  (if (null? laddr)
   tree
-  (find-utterance-from-laddr (list-ref (ess-utterance-args tree) (car laddr)) (cdr laddr))))
+  (find-utterance-from-laddr (list-ref (utterance-args tree) (car laddr)) (cdr laddr))))
 
 (define (add-to-screen root childfunc)
  (display-on-screen 0 0 (/ WIDTH 2) 0 root childfunc)
@@ -482,10 +482,10 @@
 
 (define (display-on-screen x y w h root childfunc)
  (let ((tree
-  (let* ((addr (root->ess-addr root childfunc '()))
-         (dummy-utterance (ess-utterance addr 0 0 0 0 0 0 '() (cons '(0 0 0) '(0 0 0)))))
+  (let* ((n (root->node root childfunc '()))
+         (dummy-utterance (utterance n 0 0 0 0 0 0 '() (cons '(0 0 0) '(0 0 0)))))
    (whole-tree
-    addr
+    n
     childfunc
     dummy-utterance
     (set)
@@ -497,75 +497,76 @@
     0
     0
     1))))
- (set-whole-tree-utterance-tree! tree (ess-addr->ess-utterance (whole-tree-addr-tree tree) 0 0 w 0 '() tree))
+ (set-whole-tree-utterance-tree! tree (node->utterance (whole-tree-n-tree tree) 0 0 w 0 '() tree))
  (set-whole-tree-selection! tree (whole-tree-utterance-tree tree))
  (set! Trees (append Trees (list tree)))))
 
-(define (ess-addr->ess-utterance addr x y w row siblings tree)
+(define (node->utterance n x y w row siblings tree)
  (with
   ((let ((children 
-          (if (closed? addr tree)
+          (if (closed? n tree)
            '()
-           (let ((child-w (if VERTICAL (foldl max 0 (map (lambda (arg) (ess-addr-width arg tree)) (ess-addr-args addr))) -1)))
+           (let ((child-w (if VERTICAL (foldl max 0 (map (lambda (arg) (node-width arg tree)) (node-args n))) -1)))
             (caddr
              (foldl
               (lambda (arg data)
-               (let ((res (ess-addr->ess-utterance
+               (let ((res (node->utterance
                            arg
                            (if VERTICAL (+ (car data) w) (car data))
-                           (if VERTICAL (cadr data) (+ (cadr data) (ess-addr-height arg tree)))
+                           (if VERTICAL (cadr data) (+ (cadr data) (node-height arg tree)))
                            child-w
                            (+ 1 row)
-                           (- (length (ess-addr-args addr)) 1)
+                           (- (length (node-args n)) 1)
                            tree)))
                 (list
-                 (if VERTICAL (car data) (+ (car data) (ess-utterance-w res)))
-                 (if VERTICAL (+ (cadr data) (ess-addr-height arg tree)) (cadr data))
+                 (if VERTICAL (car data) (+ (car data) (utterance-w res)))
+                 (if VERTICAL (+ (cadr data) (node-height arg tree)) (cadr data))
                  (if (null? res)
                   (caddr data)
                   (append
                    (caddr data)
                    (list res))))))
               (list x y '())
-              (ess-addr-args addr)))))))
-    (ess-utterance
-     addr
+              (node-args n)))))))
+    (utterance
+     n
      x
      y
-     (if VERTICAL w (max (box-width (ess-man-text (ess-addr-man addr))) (apply + (map ess-utterance-w children))))
-     (ess-addr-height addr tree)
-     (box-width (ess-man-text (ess-addr-man addr)))
-     (box-height (ess-man-text (ess-addr-man addr)))
+     (if VERTICAL w (max (box-width ((node-text-func n) n)) (apply + (map utterance-w children))))
+     (node-height n tree)
+     (box-width ((node-text-func n) n))
+     (box-height ((node-text-func n) n))
      children
-     (get-color addr siblings))))
+     (get-color n siblings))))
 
-  (get-color (addr siblings)
-   (if (eq? addr (ess-utterance-addr (whole-tree-selection Selected-tree)))
+  (get-color (n siblings)
+   (if (eq? n (utterance-n (whole-tree-selection Selected-tree)))
     SELCOLOR
     (if (eq? COLORSCHEME 'gradient)
-     (let* ((pos (if (null? (ess-addr-laddr addr)) 0 (last (ess-addr-laddr addr))))
+     (let* ((pos (if (null? (node-laddr n)) 0 (last (node-laddr n))))
   	  (diff (/ pos (if (zero? siblings) 1 siblings)))
   	  (col (map + INITIALCOLOR (map round (map * (make-list 3 diff) COLORRANGES)))))
-      (if #f ;(null? (ess-man-args (ess-addr-man addr)))
+      (if #f ;(null? (ess-man-args (node-man n)))
        CODECOLOR1
        (cons (apply make-object color% FGCOLOR) (apply make-object color% col))))
-     (let* ((row (length (ess-addr-laddr addr)))
-  	  (col (if (null? (ess-addr-laddr addr)) 0 (last (ess-addr-laddr addr)))))
-      (if #f ;(null? (ess-man-args (ess-addr-man addr)))
+     (let* ((row (length (node-laddr n)))
+  	  (col (if (null? (node-laddr n)) 0 (last (node-laddr n)))))
+      (if #f ;(null? (ess-man-args (node-man n)))
        (if (zero? col) CODECOLOR3 (if (odd? col) CODECOLOR1 CODECOLOR2))
        (if (odd? row)
         (if (zero? col) COLOR5 (if (odd? col) COLOR1 COLOR2))
         (if (zero? col) COLOR6 (if (odd? col) COLOR3 COLOR4))))))))
   ))
 
-(define (root->ess-addr man childlist laddr)
- (ess-addr man laddr
+(define (root->node data childlist laddr)
+ (node data laddr
   (delay
-   (let ((children (childlist man)))
+   (let ((children (childlist data)))
     (map
-     (lambda (arg n) (root->ess-addr arg childlist (append laddr (list n))))
+     (lambda (arg n) (root->node arg childlist (append laddr (list n))))
      children
-     (build-list (length children) values))))))
+     (build-list (length children) values))))
+  (lambda (n) (format "~s" (cdr (node-data n))))))
 
 (define-syntax (with stx)
  (let* ((l (syntax->datum stx))
