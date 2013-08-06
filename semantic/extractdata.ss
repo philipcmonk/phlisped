@@ -3,7 +3,7 @@
 (require "graph.ss" "find.ss" "disp.ss")
 (require racket/set)
 
-(provide Thecanvas Info)
+(provide Thecanvas Info (all-defined-out))
 
 (define FILENAME "extractdata.ss")
 (define GRFILE "data2")
@@ -73,25 +73,66 @@
 
 
 (define (graph->file g)
- (if NEWCODE
-  (call-with-output-file GRFILE #:exists 'truncate (lambda (f) (write g f)))
-  '()))
+ (call-with-output-file GRFILE #:exists 'truncate (lambda (f) (write g f))))
 
 (display (graph->string G))
-(graph->file G)
+(if NEWCODE
+ (graph->file G)
+ '())
+
+(define (reify g id)
+ (let ((has-child (graph-neighborhood-edge-forward G id "has child"))
+       (is-call-to (graph-neighborhood-edge-forward G id "is call to"))
+       (is-written (graph-neighborhood-edge-forward G id "is written"))
+       (has-scope (graph-neighborhood-edge-backward G id "has scope")))
+  (string-append
+   (if (null? has-scope)
+    ""
+    (apply string-append
+     (map ; go forwards on (triple-start t) to get argnames
+      (lambda (t) (format "(define (f~s ~a) ~a)" (triple-start t) (string-join (map (compose (curry format "~s") triple-end) (graph-neighborhood-edge-forward G (triple-start t) "has argname")) " ") (reify g (triple-start t))))
+      has-scope)))
+   (if (not (null? is-written))
+    (format "~s" (triple-end (car is-written)))
+    (if (not (null? has-child))
+     (string-join
+      (map (curry reify g) (map triple-end has-child))
+      " "
+      #:before-first "("
+      #:after-last ")")
+     (if (not (null? is-call-to))
+      (string-join
+       (map (curry reify g) (map triple-end (graph-neighborhood-edge-forward G id "has arg")))
+       " "
+       #:before-first (format "(f~s " (triple-end (car is-call-to)))
+       #:after-last ")")
+      (begin (display "unable to categorize id:  ") (display id) (newline))))))))
+
+;(reify G 0)
+
+(define (test->graph->file filename)
+ (graph->file (string->graph (file->string filename))))
+
+;(test->graph->file "testdata2")
 
 (with
- ((display-on-screen 0 30 WIDTH (- HEIGHT 30) (cons (triple-start (car (graph-edges G))) '())
+ ((display-on-screen 0 30 WIDTH (- HEIGHT 30) (list 0 'list '())
   child-fun))
 
  (child-fun (a)
   (with
-   (((compose
-      (curry map (compose (curryr get-rep child-fun) triple-end))
-      (compose
-       (curryr (curry graph-neighborhood-edge-forward G) "has child")
-       car))
-      a))
+   ((map
+     (compose (curryr get-rep child-fun) triple-end)
+     (append
+      (graph-neighborhood-edge-forward G (car a) "has child")
+      (graph-neighborhood-edge-forward G (car a) "is call to")
+      (graph-neighborhood-edge-forward G (car a) "has arg"))))
+;   (((compose
+;      (curry map (compose (curryr get-rep child-fun) triple-end))
+;      (compose
+;       (curryr (curry graph-neighborhood-edge-forward G) "has child")
+;       car))
+;      a))
 
    (get-rep (id child-fun)
     (with
@@ -100,8 +141,15 @@
      (get-written (id child-fun)
       (let ((nbhd (graph-neighborhood-edge-forward G id "is written")))
        (if (null? nbhd)
-        (get-written (caar (child-fun (cons id '()))) child-fun)
-        (triple-end (car nbhd))))))))))
+        (let ((nbhd2 (graph-neighborhood-edge-forward G id "is call to")))
+         (if (null? nbhd2)
+          (let ((nbhd3 (graph-neighborhood-edge-forward G id "has name")))
+           (if (null? nbhd3)
+            (list 'list '-)
+            (list 'named (triple-end (car nbhd3)))))
+          (list 'call '--)))
+;          (let ((nbhd3 (graph-neighborhood-edge-forward G (triple-end (car nbhd2)) "has name")))
+        (list 'terminal (triple-end (car nbhd)))))))))))
 
 
 ;(letrec

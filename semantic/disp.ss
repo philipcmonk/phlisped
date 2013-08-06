@@ -60,6 +60,170 @@
 (define closed? (negate open?))
 (define node-args (compose force node-prom-args))
 
+(define key-evs
+ (with
+  ((hash
+    #\n new-tree
+    #\N replace-major-tree
+    #\tab select-new-tree
+    #\q remove-tree
+    #\h (lambda (_) (go 'left Selected-tree))
+    #\j (lambda (_) (go 'down Selected-tree))
+    #\k (lambda (_) (go 'up Selected-tree))
+    #\l (lambda (_) (go 'right Selected-tree))
+    #\o (lambda (_) (open-u (whole-tree-selection Selected-tree) #f Selected-tree))
+    #\c (lambda (_) (close-u (whole-tree-selection Selected-tree) #f Selected-tree))
+    #\O (lambda (_) (open-u (whole-tree-selection Selected-tree) #t Selected-tree))
+    #\C (lambda (_) (close-u (whole-tree-selection Selected-tree) #t Selected-tree))
+    #\z zoom-out
+    'wheel-up (lambda (_) (set-whole-tree-offset-x! Selected-tree (+ SCROLLDIST (whole-tree-offset-x Selected-tree))) (send Thecanvas on-paint))
+    'wheel-down (lambda (_) (set-whole-tree-offset-x! Selected-tree (+ (- SCROLLDIST) (whole-tree-offset-x Selected-tree))) (send Thecanvas on-paint))
+    'wheel-left (lambda (_) (set-whole-tree-offset-y! Selected-tree (+ SCROLLDIST (whole-tree-offset-y Selected-tree))) (send Thecanvas on-paint))
+    'wheel-right (lambda (_) (set-whole-tree-offset-y! Selected-tree (+ (- SCROLLDIST) (whole-tree-offset-y Selected-tree))) (send Thecanvas on-paint))
+    ))
+
+  (new-tree (event)
+   (add-to-screen (node-data (utterance-n (whole-tree-selection Selected-tree))) (whole-tree-childfunc Selected-tree))
+   (generate-utterance-tree Selected-tree)
+   (send Thecanvas on-paint))
+
+  (replace-major-tree (event)
+   (let* ((tree (cadr Trees))
+          (n (root->node (node-data (utterance-n (whole-tree-selection Selected-tree))) (whole-tree-childfunc tree) '())))
+    (set-whole-tree-n-tree! tree n)
+    (set-whole-tree-utterance-tree! tree (node->utterance (whole-tree-n-tree tree) 0 0 0 0 '() tree))
+    (set-whole-tree-selection! tree (whole-tree-utterance-tree tree))
+    (set-whole-tree-offset-x! tree 0)
+    (set-whole-tree-offset-y! tree 0)
+    (set! Selected-tree tree))
+   (generate-utterance-tree Selected-tree)
+   (send Thecanvas on-paint))
+
+  (select-new-tree (event)
+   (set! Selected-tree
+    (if (send event get-shift-down)
+     (let ((r (member Selected-tree (reverse Trees))))
+      (if (null? (cddr r))
+       (last Trees)
+       (cadr r)))
+     (let ((r (member Selected-tree Trees)))
+      (if (null? (cdr r))
+       (if (null? (cdr Trees))
+        (car Trees)
+        (cadr Trees))
+       (cadr r)))))
+   (generate-utterance-tree Selected-tree)
+   (send Thecanvas on-paint))
+
+  (remove-tree (event)
+   (let ((next
+         (let ((r (member Selected-tree Trees)))
+          (if (null? (cdr r))
+           (if (null? (cdr Trees))
+            (car Trees)
+            (cadr Trees))
+           (cadr r)))))
+         (set! Trees (remove Selected-tree Trees))
+         (set! Selected-tree next)))
+
+  (go (dir tree)
+   (let ((new-sel (apply find-utterance (whole-tree-utterance-tree tree)
+                   (cond
+                    ((eq? dir 'left)
+                     (list (+ (utterance-x (whole-tree-selection tree)) -1) (utterance-y (whole-tree-selection tree)) tree))
+                    ((eq? dir 'down)
+                     (list (utterance-x (whole-tree-selection tree)) (+ (utterance-y (whole-tree-selection tree)) (utterance-h (whole-tree-selection tree)) 1) tree))
+                    ((eq? dir 'up)
+                     (list (utterance-x (whole-tree-selection tree)) (+ (utterance-y (whole-tree-selection tree)) -1) tree))
+                    ((eq? dir 'right)
+                     (list (+ (utterance-x (whole-tree-selection tree)) (utterance-w (whole-tree-selection tree)) 1) (utterance-y (whole-tree-selection tree)) tree))))))
+   (select (if new-sel new-sel (whole-tree-selection tree)) tree))
+   (generate-utterance-tree tree)
+   (send Thecanvas on-paint))
+
+  (zoom-out (event)
+   (set-whole-tree-offset-x! Selected-tree (- (utterance-y (whole-tree-selection Selected-tree))))
+   (set-whole-tree-offset-y! Selected-tree (- (utterance-x (whole-tree-selection Selected-tree))))
+   (set-whole-tree-zoom! Selected-tree (if (= (whole-tree-zoom Selected-tree) 1) (if VERTICAL (/ (whole-tree-h Selected-tree) (utterance-h (whole-tree-selection Selected-tree))) (/ (whole-tree-w Selected-tree) (utterance-w (whole-tree-selection Selected-tree) ))) 1))
+   (send Thecanvas on-paint))
+  ))
+
+(define mouse-evs
+ (hash
+  'dragging (lambda (event)
+             (define-mouse-handler (rel-x rel-y)
+              (cond
+               ((send event get-left-down)
+                (set-whole-tree-offset-x! Chosen-tree (+ (whole-tree-offset-x Chosen-tree) (/ (+ (- (car Mouse-pos)) rel-x) (whole-tree-zoom tree))))
+                (set-whole-tree-offset-y! Chosen-tree (+ (whole-tree-offset-y Chosen-tree) (/ (+ (- (cdr Mouse-pos)) rel-y) (whole-tree-zoom tree))))
+                (set! Mouse-pos (cons rel-x rel-y))
+                (send Thecanvas on-paint)))))
+  'motion (lambda (event)
+           (define-mouse-handler (clicked)
+            (let ((text (format "~s" (node-data (utterance-n clicked)))))
+             (if (equal? Info text)
+              '()
+              (begin
+               (set! Info text)
+               (paint-info Info #t))))))
+  'left-down (lambda (event)
+              (define-mouse-handler (rel-x rel-y)
+               (set! Chosen-tree tree)
+               (set! Mouse-pos (cons rel-x rel-y))))
+  'left-up (lambda (event)
+            (define-mouse-handler (clicked)
+             (select clicked tree)
+             (generate-utterance-tree tree)
+             (send Thecanvas on-paint)))
+  'middle-down (lambda (event)
+                (define-mouse-handler (clicked)
+                 (select clicked tree)
+                 (close-u (whole-tree-selection tree) (send event get-control-down) Selected-tree)))
+  'right-down (lambda (event)
+               (define-mouse-handler (clicked)
+                (select clicked tree)
+                (open-u (whole-tree-selection tree) (send event get-control-down) Selected-tree)))
+))
+
+(define (open-u u deep? tree)
+ (set-whole-tree-open! tree (set-union (whole-tree-open tree) (list->set
+                             (if deep?
+                              (flatten (cons (utterance-n u) (map (lambda (a) (node-deep-args a (compose (curry eq? 'named) cadr node-data))) (node-args (utterance-n u)))))
+;                                                       (lambda (n) #f
+                              ;(null? (ess-man-args (node-man n)))
+                              (letrec
+                               ((lam (lambda (l)
+                                      (if (or (null? l) (ormap (lambda (x) (closed? x tree)) l))
+                                       l
+                                       (lam (flatten (map node-args l)))))))
+                               (lam (list (utterance-n u))))))))
+  (generate-utterance-tree tree)
+  (send Thecanvas on-paint))
+
+(define (close-u u deep? tree)
+ (set-whole-tree-open! tree (set-subtract (whole-tree-open tree) (list->set
+                                (if deep?
+                                 (let ((remnant (if (closed? (utterance-n u) tree) (utterance-parent u tree) u)))
+                                  (select remnant tree)
+                                  (flatten (node-deep-args (utterance-n remnant) (curryr closed? tree))))
+                                 (if (closed? (utterance-n u) tree)
+                                  (begin
+                                   (select (utterance-parent u tree) tree)
+                                   (flatten (node-deep-args (utterance-n (utterance-parent u tree)) (curryr closed? tree))))
+                                  (letrec
+                                   ((lam (lambda (l)
+                                          (if (andmap
+                                               (lambda (x) (or (closed? x tree) (null? (node-args x))))
+                                               (flatten (map node-args l)))
+                                           l
+                                           (lam (flatten (map node-args l)))))))
+                                   (lam (list (utterance-n u)))))))))
+ (generate-utterance-tree tree)
+ (send Thecanvas on-paint))
+
+(define (node-deep-args n pred)
+ (if (pred n) '() (cons n (map (lambda (a) (node-deep-args a pred)) (node-args n)))))
+
 (define my-canvas%
  (with
   ((class* canvas% ()
@@ -153,255 +317,85 @@
           (ftglRenderFont Font text 65535))))))))
 
    (define/override (on-event event)
-    (cond
-     ((send event dragging?)
-      (define-mouse-handler (rel-x rel-y)
-       (cond
-        ((send event get-left-down)
-         (set-whole-tree-offset-x! Chosen-tree (+ (whole-tree-offset-x Chosen-tree) (/ (+ (- (car Mouse-pos)) rel-x) (whole-tree-zoom tree))))
-         (set-whole-tree-offset-y! Chosen-tree (+ (whole-tree-offset-y Chosen-tree) (/ (+ (- (cdr Mouse-pos)) rel-y) (whole-tree-zoom tree))))
- 	(set! Mouse-pos (cons rel-x rel-y))
- 	(send this on-paint)))))
-     ((eq? (send event get-event-type) 'motion)
-      (define-mouse-handler (clicked)
-       (let ((text (format "~s" (node-data (utterance-n clicked)))))
-        (if (equal? Info text)
-         '()
-         (begin
-          (set! Info text)
-          (paint-info Info #t))))))
-     ((eq? (send event get-event-type) 'left-down)
-      (define-mouse-handler (rel-x rel-y)
-       (set! Chosen-tree tree)
-       (set! Mouse-pos (cons rel-x rel-y))))
-     ((eq? (send event get-event-type) 'left-up)
-      (define-mouse-handler (clicked)
-       (select clicked tree)
-       (generate-utterance-tree tree)
-       (send this on-paint)))
-     ((eq? (send event get-event-type) 'middle-down)
-      (define-mouse-handler (clicked)
-       (select clicked tree)
-       (close-u (whole-tree-selection tree) (send event get-control-down) Selected-tree)))
-     ((eq? (send event get-event-type) 'right-down)
-      (define-mouse-handler (clicked)
-       (select clicked tree)
-       (open-u (whole-tree-selection tree) (send event get-control-down) Selected-tree)))
-     (#t '())))
+    (if (send event dragging?)
+      ((hash-ref mouse-evs 'dragging) event)
+      (if (hash-has-key? mouse-evs (send event get-event-type))
+        ((hash-ref mouse-evs (send event get-event-type)) event)
+        '())))
 
    (define/override (on-char event)
-    (cond
-     ((eq? (send event get-key-code) #\f)
-      (begin (set! VERTICAL (not VERTICAL)) (generate-utterance-tree Selected-tree) (send this on-paint)))
-     ((eq? (send event get-key-code) #\F)
-      (begin (set! COLORSCHEME (if (eq? COLORSCHEME 'gradient) 'alternate 'gradient)) (generate-utterance-tree Selected-tree) (send this on-paint)))
-     ((eq? (send event get-key-code) #\n)
-      (add-to-screen (node-data (utterance-n (whole-tree-selection Selected-tree))) (whole-tree-childfunc Selected-tree))
-      (generate-utterance-tree Selected-tree)
-      (send this on-paint))
-     ((eq? (send event get-key-code) #\N)
-      (let* ((tree (cadr Trees))
-             (n (root->node (node-data (utterance-n (whole-tree-selection Selected-tree))) (whole-tree-childfunc tree) '())))
-       (set-whole-tree-n-tree! tree n)
-       (set-whole-tree-utterance-tree! tree (node->utterance (whole-tree-n-tree tree) 0 0 0 0 '() tree))
-       (set-whole-tree-selection! tree (whole-tree-utterance-tree tree))
-       (set-whole-tree-offset-x! tree 0)
-       (set-whole-tree-offset-y! tree 0)
-       (set! Selected-tree tree))
-      (generate-utterance-tree Selected-tree)
-      (send this on-paint))
-     ((eq? (send event get-key-code) #\tab)
-      (set! Selected-tree
-       (if (send event get-shift-down)
-        (let ((r (member Selected-tree (reverse Trees))))
-         (if (null? (cddr r))
-          (last Trees)
-          (cadr r)))
-        (let ((r (member Selected-tree Trees)))
-         (if (null? (cdr r))
-          (if (null? (cdr Trees))
-           (car Trees)
-           (cadr Trees))
-          (cadr r)))))
-      (generate-utterance-tree Selected-tree)
-      (send this on-paint))
-     ((eq? (send event get-key-code) #\q)
-      (let ((next
-       (let ((r (member Selected-tree Trees)))
-        (if (null? (cdr r))
-         (if (null? (cdr Trees))
-          (car Trees)
-          (cadr Trees))
-         (cadr r)))))
-       (set! Trees (remove Selected-tree Trees))
-       (set! Selected-tree next))
-      (normalize-trees) ;***
-      (generate-utterance-tree Selected-tree)
-      (send this on-paint))
-     ((eq? (send event get-key-code) #\h)
-      (go 'left Selected-tree))
-     ((eq? (send event get-key-code) #\j)
-      (go 'down Selected-tree))
-     ((eq? (send event get-key-code) #\k)
-      (go 'up Selected-tree))
-     ((eq? (send event get-key-code) #\l)
-      (go 'right Selected-tree))
-     ((eq? (send event get-key-code) #\o)
-      (open-u (whole-tree-selection Selected-tree) #f Selected-tree))
-     ((eq? (send event get-key-code) #\c)
-      (close-u (whole-tree-selection Selected-tree) #f Selected-tree))
-     ((eq? (send event get-key-code) #\O)
-      (open-u (whole-tree-selection Selected-tree) #t Selected-tree))
-     ((eq? (send event get-key-code) #\C)
-      (close-u (whole-tree-selection Selected-tree) #t Selected-tree))
-     ((eq? (send event get-key-code) #\z)
-      (set-whole-tree-offset-x! Selected-tree (- (utterance-y (whole-tree-selection Selected-tree))))
-      (set-whole-tree-offset-y! Selected-tree (- (utterance-x (whole-tree-selection Selected-tree))))
-      (set-whole-tree-zoom! Selected-tree (if (= (whole-tree-zoom Selected-tree) 1) (if VERTICAL (/ (whole-tree-h Selected-tree) (utterance-h (whole-tree-selection Selected-tree))) (/ (whole-tree-w Selected-tree) (utterance-w (whole-tree-selection Selected-tree) ))) 1))
-      (send this on-paint))
-     ((eq? (send event get-key-code) 'wheel-up)
-      (if VERTICAL
-       (set-whole-tree-offset-y! Selected-tree (+ SCROLLDIST (whole-tree-offset-y Selected-tree)))
-       (set-whole-tree-offset-x! Selected-tree (+ SCROLLDIST (whole-tree-offset-x Selected-tree))))
-      (send this on-paint))
-     ((eq? (send event get-key-code) 'wheel-down)
-      (if VERTICAL
-       (set-whole-tree-offset-y! Selected-tree (+ (- SCROLLDIST) (whole-tree-offset-y Selected-tree)))
-       (set-whole-tree-offset-x! Selected-tree (+ (- SCROLLDIST) (whole-tree-offset-x Selected-tree))))
-      (send this on-paint))
-     ((eq? (send event get-key-code) 'wheel-left)
-      (if VERTICAL
-       (set-whole-tree-offset-x! Selected-tree (+ SCROLLDIST (whole-tree-offset-x Selected-tree)))
-       (set-whole-tree-offset-y! Selected-tree (+ SCROLLDIST (whole-tree-offset-y Selected-tree))))
-      (send this on-paint))
-     ((eq? (send event get-key-code) 'wheel-right)
-      (if VERTICAL
-       (set-whole-tree-offset-x! Selected-tree (+ (- SCROLLDIST) (whole-tree-offset-x Selected-tree)))
-       (set-whole-tree-offset-y! Selected-tree (+ (- SCROLLDIST) (whole-tree-offset-y Selected-tree))))
-      (send this on-paint))))
+    (if (hash-has-key? key-evs (send event get-key-code))
+     ((hash-ref key-evs (send event get-key-code)) event)
+     '()))
   
    (super-instantiate () (style '(gl)))))
-
-  (go (dir tree)
-   (let ((new-sel (apply find-utterance (whole-tree-utterance-tree tree)
-  		 (cond
-  		  ((eq? dir 'left)
-  		   (list (+ (utterance-x (whole-tree-selection tree)) -1) (utterance-y (whole-tree-selection tree)) tree))
-  		  ((eq? dir 'down)
-  		   (list (utterance-x (whole-tree-selection tree)) (+ (utterance-y (whole-tree-selection tree)) (utterance-h (whole-tree-selection tree)) 1) tree))
-  		  ((eq? dir 'up)
-  		   (list (utterance-x (whole-tree-selection tree)) (+ (utterance-y (whole-tree-selection tree)) -1) tree))
-  		  ((eq? dir 'right)
-  		   (list (+ (utterance-x (whole-tree-selection tree)) (utterance-w (whole-tree-selection tree)) 1) (utterance-y (whole-tree-selection tree)) tree))))))
-   (select (if new-sel new-sel (whole-tree-selection tree)) tree))
-   (generate-utterance-tree tree)
-   (send Thecanvas on-paint))
-
-  (open-u (u deep? tree)
-   (set-whole-tree-open! tree (set-union (whole-tree-open tree) (list->set
-  			     (if deep?
-  			      (flatten (node-deep-args (utterance-n u) (lambda (n) #f
-                                ;(null? (ess-man-args (node-man n)))
-                                )))
-  			      (letrec
-  			       ((lam (lambda (l)
-  				      (if (or (null? l) (ormap (lambda (x) (closed? x tree)) l))
-  				       l
-  				       (lam (flatten (map node-args l)))))))
-  			       (lam (list (utterance-n u))))))))
-    (generate-utterance-tree tree)
-    (send Thecanvas on-paint))
-
-   (close-u (u deep? tree)
-    (set-whole-tree-open! tree (set-subtract (whole-tree-open tree) (list->set
-   				(if deep?
-   				 (let ((remnant (if (closed? (utterance-n u) tree) (utterance-parent u tree) u)))
-   				  (select remnant tree)
-   				  (flatten (node-deep-args (utterance-n remnant) (curryr closed? tree))))
-   				 (if (closed? (utterance-n u) tree)
-   				  (begin
-   				   (select (utterance-parent u tree) tree)
-   				   (flatten (node-deep-args (utterance-n (utterance-parent u tree)) (curryr closed? tree))))
-   				  (letrec
-   				   ((lam (lambda (l)
-   					  (if (andmap
-   					       (lambda (x) (or (closed? x tree) (null? (node-args x))))
-   					       (flatten (map node-args l)))
-   					   l
-   					   (lam (flatten (map node-args l)))))))
-   				   (lam (list (utterance-n u)))))))))
-    (generate-utterance-tree tree)
-    (send Thecanvas on-paint))
-
-
-   (node-deep-args (n pred)
-    (cons n (if (pred n) '() (map (lambda (a) (node-deep-args a pred)) (node-args n)))))
-
-   (paint-info (text swap)
-    (gl-enable 'scissor-test)
-    (apply gl-scissor (rel->gl Info-dim))
-   ; (apply gl-viewport (rel->gl Info-dim))
-    (gl-viewport 0 0 WIDTH 30)
-    (gl-matrix-mode 'projection)
-    (gl-load-identity)
-    (gl-ortho 0 WIDTH 0 30 -1.0 1.0)
-    (gl-clear 'color-buffer-bit)
-    (gl-color (/ (car (car INFOCOLOR)) 255) (/ (cadr (car INFOCOLOR)) 255) (/ (caddr (car INFOCOLOR)) 255))
-    (gl-raster-pos 0 10)
-    (ftglRenderFont Font (substring text 0 (min (string-length text) 120)) 65535)
-    (if swap
-     (send Thecanvas swap-gl-buffers)
-     '())
-     (gl-disable 'scissor-test))
-
-   (select (u tree)
-    (set! Selected-tree tree)
-    (set-whole-tree-selection! tree u)
-    (let ((x (+ (whole-tree-offset-x tree) (utterance-x u)))
-          (y (+ (whole-tree-offset-y tree) (utterance-y u)))
-          (w (utterance-w u))
-          (h (utterance-h u)))
-     (if
-      (or
-       (and (negative? (+ x w)) (not VERTICAL))
-       (> x (/ (whole-tree-w tree) (whole-tree-zoom tree))))
-      (let ((c (+ (utterance-x u) (/ w 2))))
-       (set-whole-tree-offset-x! tree (- (+ c (- (/ (whole-tree-w tree) (whole-tree-zoom tree) 2))))))
-      '())
-     (if
-      (or
-       (and (negative? (+ y h)) VERTICAL)
-       (> y (/ (whole-tree-h tree) (whole-tree-zoom tree))))
-      (let ((c (+ (utterance-y u) (/ h 2))))
-       (set-whole-tree-offset-y! tree (- (+ c (- (/ (whole-tree-h tree) (whole-tree-zoom tree) 2))))))
-      '())))
-
-   (whole-tree-dim (tree)
-    (list (whole-tree-x tree) (whole-tree-y tree) (whole-tree-w tree) (whole-tree-h tree)))
-
-   (in? (dim x y)
-    (and (> x (car dim)) (> y (cadr dim)) (< x (+ (car dim) (caddr dim))) (< y (+ (cadr dim) (cadddr dim)))))
-
-   (utterance-parent (u tree)
-    (apply find-utterance (whole-tree-utterance-tree tree)
-     (if VERTICAL
-      (list (+ (utterance-x u) -1) (utterance-y u) tree)
-      (list (utterance-x u) (+ (utterance-y u) -1) tree))))
-   
-   (find-utterance (root x y tree)
-    (if (or
-         (< (min-dim x y) (+ (utterance-min-dim root) (utterance-min-dim-span root)))
-         (closed? (utterance-n root) tree)
-         (null? (node-args (utterance-n root)))
-         (> (maj-dim x y) (let ((baby (last (utterance-args root)))) (+ (utterance-maj-dim baby) (utterance-maj-dim-span baby)))))
-     root
-     (ormap
-      (lambda (child)
-       (if (< (maj-dim x y) (+ (utterance-maj-dim child) (utterance-maj-dim-span child)))
-        (find-utterance child x y tree)
-        #f))
-      (utterance-args root))))
   ))
+
+(define (paint-info text swap)
+ (gl-enable 'scissor-test)
+ (apply gl-scissor (rel->gl Info-dim))
+; (apply gl-viewport (rel->gl Info-dim))
+ (gl-viewport 0 0 WIDTH 30)
+ (gl-matrix-mode 'projection)
+ (gl-load-identity)
+ (gl-ortho 0 WIDTH 0 30 -1.0 1.0)
+ (gl-clear 'color-buffer-bit)
+ (gl-color (/ (car (car INFOCOLOR)) 255) (/ (cadr (car INFOCOLOR)) 255) (/ (caddr (car INFOCOLOR)) 255))
+ (gl-raster-pos 0 10)
+ (ftglRenderFont Font (substring text 0 (min (string-length text) 120)) 65535)
+ (if swap
+  (send Thecanvas swap-gl-buffers)
+  '())
+  (gl-disable 'scissor-test))
+
+
+(define (whole-tree-dim tree)
+ (list (whole-tree-x tree) (whole-tree-y tree) (whole-tree-w tree) (whole-tree-h tree)))
+
+(define (in? dim x y)
+ (and (> x (car dim)) (> y (cadr dim)) (< x (+ (car dim) (caddr dim))) (< y (+ (cadr dim) (cadddr dim)))))
+
+(define (utterance-parent u tree)
+ (apply find-utterance (whole-tree-utterance-tree tree)
+  (if VERTICAL
+   (list (+ (utterance-x u) -1) (utterance-y u) tree)
+   (list (utterance-x u) (+ (utterance-y u) -1) tree))))
+   
+(define (find-utterance root x y tree)
+ (if (or
+      (< (min-dim x y) (+ (utterance-min-dim root) (utterance-min-dim-span root)))
+      (closed? (utterance-n root) tree)
+      (null? (node-args (utterance-n root)))
+      (> (maj-dim x y) (let ((baby (last (utterance-args root)))) (+ (utterance-maj-dim baby) (utterance-maj-dim-span baby)))))
+  root
+  (ormap
+   (lambda (child)
+    (if (< (maj-dim x y) (+ (utterance-maj-dim child) (utterance-maj-dim-span child)))
+     (find-utterance child x y tree)
+     #f))
+   (utterance-args root))))
+
+(define (select u tree)
+ (set! Selected-tree tree)
+ (set-whole-tree-selection! tree u)
+ (let ((x (+ (whole-tree-offset-x tree) (utterance-x u)))
+       (y (+ (whole-tree-offset-y tree) (utterance-y u)))
+       (w (utterance-w u))
+       (h (utterance-h u)))
+  (if
+   (or
+    (and (negative? (+ x w)) (not VERTICAL))
+    (> x (/ (whole-tree-w tree) (whole-tree-zoom tree))))
+   (let ((c (+ (utterance-x u) (/ w 2))))
+    (set-whole-tree-offset-x! tree (- (+ c (- (/ (whole-tree-w tree) (whole-tree-zoom tree) 2))))))
+   '())
+  (if
+   (or
+    (and (negative? (+ y h)) VERTICAL)
+    (> y (/ (whole-tree-h tree) (whole-tree-zoom tree))))
+   (let ((c (+ (utterance-y u) (/ h 2))))
+    (set-whole-tree-offset-y! tree (- (+ c (- (/ (whole-tree-h tree) (whole-tree-zoom tree) 2))))))
+   '())))
 
 (define Info-dim (list 0 (- HEIGHT 30) WIDTH 30))
 
@@ -446,18 +440,12 @@
 (define (maj-dim x y) (if VERTICAL y x))
 (define (min-dim x y) (if VERTICAL x y))
 
-
-;(define (ess-man-text lst)
-; (format "~s" (cdr lst)))
-
 (define (rel->gl l)
  (list (car l) (- HEIGHT (+ (cadddr l) (cadr l))) (caddr l) (cadddr l)))
 
-
-
 (define (generate-utterance-tree tree)
-    (set-whole-tree-utterance-tree! tree (node->utterance (whole-tree-n-tree tree) (utterance-x (whole-tree-utterance-tree tree)) (utterance-y (whole-tree-utterance-tree tree)) (if VERTICAL (node-width (whole-tree-n-tree tree) tree) -1) 0 1 tree))
-    (set-whole-tree-selection! tree (find-utterance-from-laddr (whole-tree-utterance-tree tree) (node-laddr (utterance-n (whole-tree-selection tree))))))
+ (set-whole-tree-utterance-tree! tree (node->utterance (whole-tree-n-tree tree) (utterance-x (whole-tree-utterance-tree tree)) (utterance-y (whole-tree-utterance-tree tree)) (if VERTICAL (node-width (whole-tree-n-tree tree) tree) -1) 0 1 tree))
+ (set-whole-tree-selection! tree (find-utterance-from-laddr (whole-tree-utterance-tree tree) (node-laddr (utterance-n (whole-tree-selection tree))))))
 
 (define (find-utterance-from-laddr tree laddr)
  (if (null? laddr)
@@ -566,7 +554,7 @@
      (lambda (arg n) (root->node arg childlist (append laddr (list n))))
      children
      (build-list (length children) values))))
-  (lambda (n) (format "~s" (cdr (node-data n))))))
+  (lambda (n) (format "~s" (caddr (node-data n))))))
 
 (define-syntax (with stx)
  (let* ((l (syntax->datum stx))
