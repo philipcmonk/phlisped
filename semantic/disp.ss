@@ -21,10 +21,10 @@
 (define-ftgl ftglRenderFont (_fun _FTGLfont _string _int -> _void))
 (define-ftgl ftglDestroyFont (_fun _FTGLfont -> _void))
 
-(provide my-canvas% box-width box-height box-maj-dim node-width node-height node-maj-dim VERTICAL display-on-screen Thecanvas Info)
+(provide my-canvas% box-width box-height box-maj-dim node-width node-height node-maj-dim VERTICAL display-on-screen Thecanvas Info Selected-tree utterance-parent utterance-n node-data whole-tree-selection add-key-evs update-childfuncs)
 
-(struct node (data laddr prom-args text-func))
-(struct utterance (n x y w h text-w text-h args clr))
+(struct node (data laddr prom-args text-func) #:transparent)
+(struct utterance (n x y w h text-w text-h args clr) #:transparent)
 (struct whole-tree (n-tree childfunc utterance-tree open selection x y w h offset-x offset-y zoom) #:mutable)
 
 (define Trees (list (apply whole-tree 
@@ -56,9 +56,12 @@
 
 (define win (new frame% (label "vilisp") (min-width WIDTH) (min-height HEIGHT)))
 
-(define (open? n tree) (set-member? (whole-tree-open tree) n))
+(define (open? n tree) (set-member? (whole-tree-open tree) (node-laddr n)))
 (define closed? (negate open?))
 (define node-args (compose force node-prom-args))
+
+(define (add-key-evs args)
+ (set! key-evs (apply hash-set* key-evs args)))
 
 (define key-evs
  (with
@@ -186,38 +189,44 @@
 ))
 
 (define (open-u u deep? tree)
- (set-whole-tree-open! tree (set-union (whole-tree-open tree) (list->set
-                             (if deep?
-                              (flatten (cons (utterance-n u) (map (lambda (a) (node-deep-args a (compose (curry eq? 'named) cadr node-data))) (node-args (utterance-n u)))))
-;                                                       (lambda (n) #f
-                              ;(null? (ess-man-args (node-man n)))
-                              (letrec
-                               ((lam (lambda (l)
-                                      (if (or (null? l) (ormap (lambda (x) (closed? x tree)) l))
-                                       l
-                                       (lam (flatten (map node-args l)))))))
-                               (lam (list (utterance-n u))))))))
+ (set-whole-tree-open! tree (set-union (whole-tree-open tree)
+                             (list->set
+                              (map
+                               node-laddr
+                               (if deep?
+                                (flatten (cons (utterance-n u) (map (lambda (a) (node-deep-args a (compose (curry eq? 'named) cadr node-data))) (node-args (utterance-n u)))))
+;                                                         (lambda (n) #f
+                                ;(null? (ess-man-args (node-man n)))
+                                (letrec
+                                 ((lam (lambda (l)
+                                        (if (or (null? l) (ormap (lambda (x) (closed? x tree)) l))
+                                         l
+                                         (lam (flatten (map node-args l)))))))
+                                 (lam (list (utterance-n u)))))))))
   (generate-utterance-tree tree)
   (send Thecanvas on-paint))
 
 (define (close-u u deep? tree)
- (set-whole-tree-open! tree (set-subtract (whole-tree-open tree) (list->set
-                                (if deep?
-                                 (let ((remnant (if (closed? (utterance-n u) tree) (utterance-parent u tree) u)))
-                                  (select remnant tree)
-                                  (flatten (node-deep-args (utterance-n remnant) (curryr closed? tree))))
-                                 (if (closed? (utterance-n u) tree)
-                                  (begin
-                                   (select (utterance-parent u tree) tree)
-                                   (flatten (node-deep-args (utterance-n (utterance-parent u tree)) (curryr closed? tree))))
-                                  (letrec
-                                   ((lam (lambda (l)
-                                          (if (andmap
-                                               (lambda (x) (or (closed? x tree) (null? (node-args x))))
-                                               (flatten (map node-args l)))
-                                           l
-                                           (lam (flatten (map node-args l)))))))
-                                   (lam (list (utterance-n u)))))))))
+ (set-whole-tree-open! tree (set-subtract (whole-tree-open tree)
+                             (list->set
+                              (map
+                               node-laddr
+                               (if deep?
+                                (let ((remnant (if (closed? (utterance-n u) tree) (utterance-parent u tree) u)))
+                                 (select remnant tree)
+                                 (flatten (node-deep-args (utterance-n remnant) (curryr closed? tree))))
+                                (if (closed? (utterance-n u) tree)
+                                 (begin
+                                  (select (utterance-parent u tree) tree)
+                                  (flatten (node-deep-args (utterance-n (utterance-parent u tree)) (curryr closed? tree))))
+                                 (letrec
+                                  ((lam (lambda (l)
+                                         (if (andmap
+                                              (lambda (x) (or (closed? x tree) (null? (node-args x))))
+                                              (flatten (map node-args l)))
+                                          l
+                                          (lam (flatten (map node-args l)))))))
+                                  (lam (list (utterance-n u))))))))))
  (generate-utterance-tree tree)
  (send Thecanvas on-paint))
 
@@ -450,7 +459,18 @@
 (define (find-utterance-from-laddr tree laddr)
  (if (null? laddr)
   tree
-  (find-utterance-from-laddr (list-ref (utterance-args tree) (car laddr)) (cdr laddr))))
+  (begin (display tree) (newline) (find-utterance-from-laddr (list-ref (utterance-args tree) (car laddr)) (cdr laddr)))))
+
+(define (update-childfuncs childfunc)
+ (display (whole-tree-n-tree Selected-tree)) (newline)
+ (map (curryr set-whole-tree-childfunc! childfunc) (cdr Trees))
+ (map (lambda (t) (set-whole-tree-n-tree! t (root->node (node-data (whole-tree-n-tree t)) childfunc (node-laddr (whole-tree-n-tree t))))) (cdr Trees))
+ (display "uhhh") (newline)
+ (map
+  (lambda (tree) 
+    (set-whole-tree-utterance-tree! tree (node->utterance (whole-tree-n-tree tree) (utterance-x (whole-tree-utterance-tree tree)) (utterance-y (whole-tree-utterance-tree tree)) (if VERTICAL (node-width (whole-tree-n-tree tree) tree) -1) 0 1 tree)))
+  (cdr Trees))
+ (send Thecanvas on-paint))
 
 (define (add-to-screen root childfunc)
  (display-on-screen 0 0 (/ WIDTH 2) 0 root childfunc)
@@ -490,6 +510,7 @@
  (set! Trees (append Trees (list tree)))))
 
 (define (node->utterance n x y w row siblings tree)
+ (display n) (newline)
  (with
   ((let ((children 
           (if (closed? n tree)
@@ -547,6 +568,7 @@
   ))
 
 (define (root->node data childlist laddr)
+ (display data) (newline)
  (node data laddr
   (delay
    (let ((children (childlist data)))

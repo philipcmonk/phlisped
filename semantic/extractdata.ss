@@ -15,7 +15,7 @@
 (define WIDTH (* 1 1600))
 (define HEIGHT 899)
 
-(define Next-id 0)
+(define Next-id 100)
 
 (define-syntax (with stx)
  (let* ((l (syntax->datum stx))
@@ -71,6 +71,30 @@
       (cons id code)))))
   ))
 
+(define (add-sibling event)
+ (set! G (graph (graph-vertices G)
+                (let* ((id (car (node-data (utterance-n (whole-tree-selection Selected-tree)))))
+                       (parent-id (car (node-data (utterance-n (utterance-parent (whole-tree-selection Selected-tree) Selected-tree)))))
+                       (nbhd (graph-neighborhood-edge-forward G parent-id "has child")))
+                 (if (null? nbhd)
+                  (if (member (triple parent-id "has arg" id) (graph-edges G))
+                   (append (takef (graph-edges G) (negate (curry equal? (triple parent-id "has arg" id)))) (list (triple parent-id "has arg" id) (triple parent-id "has arg" Next-id) (triple Next-id "is written" 'bwahaha)) (cdr (member (triple parent-id "has arg" id) (graph-edges G))))
+                   (append (list (triple parent-id "has arg" Next-id) (triple Next-id "is written" 'wahaha)) (graph-edges G)))
+                  (append (takef (graph-edges G) (negate (curry equal? (triple parent-id "has child" id)))) (list (triple parent-id "has child" id) (triple parent-id "has child" Next-id) (triple Next-id "is written" 'mwahaha)) (cdr (member (triple parent-id "has child" id) (graph-edges G))))))))
+ (set! Next-id (+ 1 Next-id))
+ (display (graph->string G))
+ (update-childfuncs child-fun))
+
+(define (add-child event)
+ (set! G (graph (graph-vertices G)
+                (let ((id (car (node-data (utterance-n (whole-tree-selection Selected-tree))))))
+                 (append (list (triple id "has child" Next-id) (triple Next-id "is written" 'kwahaha)) (graph-edges G)))))
+ (set! Next-id (+ 1 Next-id))
+ (display (graph->string G))
+ (update-childfuncs child-fun))
+
+(add-key-evs (list #\space add-sibling
+                   #\( add-child))
 
 (define (graph->file g)
  (call-with-output-file GRFILE #:exists 'truncate (lambda (f) (write g f))))
@@ -115,41 +139,43 @@
 
 ;(test->graph->file "testdata2")
 
-(with
- ((display-on-screen 0 30 WIDTH (- HEIGHT 30) (list 0 'list '())
+(define (yup)
+ (display-on-screen 0 30 WIDTH (- HEIGHT 30) (list 0 'list '())
   child-fun))
+ 
+(define (child-fun a)
+ (with
+  ((map
+    (compose (curryr get-rep child-fun) triple-end)
+    (append
+     (graph-neighborhood-edge-forward G (car a) "has child")
+     (graph-neighborhood-edge-forward G (car a) "is call to")
+     (graph-neighborhood-edge-forward G (car a) "has arg"))))
+;  (((compose
+;     (curry map (compose (curryr get-rep child-fun) triple-end))
+;     (compose
+;      (curryr (curry graph-neighborhood-edge-forward G) "has child")
+;      car))
+;     a))
 
- (child-fun (a)
-  (with
-   ((map
-     (compose (curryr get-rep child-fun) triple-end)
-     (append
-      (graph-neighborhood-edge-forward G (car a) "has child")
-      (graph-neighborhood-edge-forward G (car a) "is call to")
-      (graph-neighborhood-edge-forward G (car a) "has arg"))))
-;   (((compose
-;      (curry map (compose (curryr get-rep child-fun) triple-end))
-;      (compose
-;       (curryr (curry graph-neighborhood-edge-forward G) "has child")
-;       car))
-;      a))
+  (get-rep (id child-fun)
+   (with
+    ((cons id (get-written id child-fun)))
 
-   (get-rep (id child-fun)
-    (with
-     ((cons id (get-written id child-fun)))
+    (get-written (id child-fun)
+     (let ((nbhd (graph-neighborhood-edge-forward G id "is written")))
+      (if (null? nbhd)
+       (let ((nbhd2 (graph-neighborhood-edge-forward G id "is call to")))
+        (if (null? nbhd2)
+         (let ((nbhd3 (graph-neighborhood-edge-forward G id "has name")))
+          (if (null? nbhd3)
+           (list 'list '-)
+           (list 'named (triple-end (car nbhd3)))))
+         (list 'call '--)))
+;         (let ((nbhd3 (graph-neighborhood-edge-forward G (triple-end (car nbhd2)) "has name")))
+       (list 'terminal (triple-end (car nbhd))))))))))
 
-     (get-written (id child-fun)
-      (let ((nbhd (graph-neighborhood-edge-forward G id "is written")))
-       (if (null? nbhd)
-        (let ((nbhd2 (graph-neighborhood-edge-forward G id "is call to")))
-         (if (null? nbhd2)
-          (let ((nbhd3 (graph-neighborhood-edge-forward G id "has name")))
-           (if (null? nbhd3)
-            (list 'list '-)
-            (list 'named (triple-end (car nbhd3)))))
-          (list 'call '--)))
-;          (let ((nbhd3 (graph-neighborhood-edge-forward G (triple-end (car nbhd2)) "has name")))
-        (list 'terminal (triple-end (car nbhd)))))))))))
+(yup)
 
 
 ;(letrec
