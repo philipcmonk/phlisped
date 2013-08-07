@@ -21,7 +21,7 @@
 (define-ftgl ftglRenderFont (_fun _FTGLfont _string _int -> _void))
 (define-ftgl ftglDestroyFont (_fun _FTGLfont -> _void))
 
-(provide my-canvas% box-width box-height box-maj-dim node-width node-height node-maj-dim VERTICAL display-on-screen Thecanvas Info Selected-tree utterance-parent utterance-n node-data whole-tree-selection add-key-evs update-childfuncs)
+(provide my-canvas% box-width box-height box-maj-dim node-width node-height node-maj-dim VERTICAL display-on-screen Thecanvas Info Selected-tree utterance-parent utterance-n node-data whole-tree-selection add-key-evs update-childfuncs set-info enter-insert-mode exit-insert-mode paint-info)
 
 (struct node (data laddr prom-args text-func) #:transparent)
 (struct utterance (n x y w h text-w text-h args clr) #:transparent)
@@ -333,12 +333,23 @@
         '())))
 
    (define/override (on-char event)
-    (if (hash-has-key? key-evs (send event get-key-code))
-     ((hash-ref key-evs (send event get-key-code)) event)
-     '()))
+    (if INSERTMODE
+     ((hash-ref key-evs 'insert) event)
+     (if (hash-has-key? key-evs (send event get-key-code))
+      ((hash-ref key-evs (send event get-key-code)) event)
+      '())))
   
    (super-instantiate () (style '(gl)))))
   ))
+
+(define INSERTMODE #f)
+
+(define (enter-insert-mode) (set! INSERTMODE #t))
+
+(define (exit-insert-mode) (set! INSERTMODE #f))
+
+(define (set-info text)
+ (set! Info text))
 
 (define (paint-info text swap)
  (gl-enable 'scissor-test)
@@ -459,13 +470,11 @@
 (define (find-utterance-from-laddr tree laddr)
  (if (null? laddr)
   tree
-  (begin (display tree) (newline) (find-utterance-from-laddr (list-ref (utterance-args tree) (car laddr)) (cdr laddr)))))
+  (find-utterance-from-laddr (list-ref (utterance-args tree) (car laddr)) (cdr laddr))))
 
 (define (update-childfuncs childfunc)
- (display (whole-tree-n-tree Selected-tree)) (newline)
  (map (curryr set-whole-tree-childfunc! childfunc) (cdr Trees))
  (map (lambda (t) (set-whole-tree-n-tree! t (root->node (node-data (whole-tree-n-tree t)) childfunc (node-laddr (whole-tree-n-tree t))))) (cdr Trees))
- (display "uhhh") (newline)
  (map
   (lambda (tree) 
     (set-whole-tree-utterance-tree! tree (node->utterance (whole-tree-n-tree tree) (utterance-x (whole-tree-utterance-tree tree)) (utterance-y (whole-tree-utterance-tree tree)) (if VERTICAL (node-width (whole-tree-n-tree tree) tree) -1) 0 1 tree)))
@@ -510,7 +519,6 @@
  (set! Trees (append Trees (list tree)))))
 
 (define (node->utterance n x y w row siblings tree)
- (display n) (newline)
  (with
   ((let ((children 
           (if (closed? n tree)
@@ -568,7 +576,6 @@
   ))
 
 (define (root->node data childlist laddr)
- (display data) (newline)
  (node data laddr
   (delay
    (let ((children (childlist data)))

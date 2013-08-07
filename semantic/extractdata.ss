@@ -82,7 +82,6 @@
                    (append (list (triple parent-id "has arg" Next-id) (triple Next-id "is written" 'wahaha)) (graph-edges G)))
                   (append (takef (graph-edges G) (negate (curry equal? (triple parent-id "has child" id)))) (list (triple parent-id "has child" id) (triple parent-id "has child" Next-id) (triple Next-id "is written" 'mwahaha)) (cdr (member (triple parent-id "has child" id) (graph-edges G))))))))
  (set! Next-id (+ 1 Next-id))
- (display (graph->string G))
  (update-childfuncs child-fun))
 
 (define (add-child event)
@@ -90,11 +89,43 @@
                 (let ((id (car (node-data (utterance-n (whole-tree-selection Selected-tree))))))
                  (append (list (triple id "has child" Next-id) (triple Next-id "is written" 'kwahaha)) (graph-edges G)))))
  (set! Next-id (+ 1 Next-id))
- (display (graph->string G))
  (update-childfuncs child-fun))
 
+(define (insert-text event)
+ (set! INSERTTEXT "")
+ (enter-insert-mode))
+
+(define INSERTTEXT "")
+
+(define (handle-insert event)
+ (let ((c (send event get-key-code)))
+  (cond
+   ((and (char? c) (not (char-whitespace? c)) (not (char-iso-control? c)))
+    (set! INSERTTEXT (string-append INSERTTEXT (string (send event get-key-code))))
+    (paint-info INSERTTEXT #t))
+   ((eq? c #\backspace)
+    (set! INSERTTEXT (substring INSERTTEXT 0 (- (string-length INSERTTEXT) 1)))
+    (paint-info INSERTTEXT #t))
+   ((eq? c #\return)
+    (set! G (graph (graph-vertices G)
+                   (let* ((id (car (node-data (utterance-n (whole-tree-selection Selected-tree)))))
+                          (nbhd (graph-neighborhood-edge-forward G id "is written"))
+                          (nbhd2 (graph-neighborhood-edge-forward G id "is named")))
+                    (if (null? nbhd)
+                     (if (null? nbhd2)
+                      (append (graph-edges G) (list (triple id "is named" (string->symbol INSERTTEXT))))
+                      (append (takef (graph-edges G) (negate (curry equal? (car nbhd2)))) (list (triple id "is named" (string->symbol INSERTTEXT))) (cdr (member (car nbhd2) (graph-edges G)))))
+                     (append (takef (graph-edges G) (negate (curry equal? (car nbhd)))) (list (triple id "is written" (string->symbol INSERTTEXT))) (cdr (member (car nbhd) (graph-edges G))))))))
+    (update-childfuncs child-fun)
+    (exit-insert-mode))
+   ((eq? c 'escape)
+    (exit-insert-mode))
+   (#t '()))))
+
 (add-key-evs (list #\space add-sibling
-                   #\( add-child))
+                   #\( add-child
+                   #\i insert-text
+                   'insert handle-insert))
 
 (define (graph->file g)
  (call-with-output-file GRFILE #:exists 'truncate (lambda (f) (write g f))))
@@ -167,12 +198,12 @@
       (if (null? nbhd)
        (let ((nbhd2 (graph-neighborhood-edge-forward G id "is call to")))
         (if (null? nbhd2)
-         (let ((nbhd3 (graph-neighborhood-edge-forward G id "has name")))
+         (let ((nbhd3 (graph-neighborhood-edge-forward G id "is named")))
           (if (null? nbhd3)
            (list 'list '-)
            (list 'named (triple-end (car nbhd3)))))
          (list 'call '--)))
-;         (let ((nbhd3 (graph-neighborhood-edge-forward G (triple-end (car nbhd2)) "has name")))
+;         (let ((nbhd3 (graph-neighborhood-edge-forward G (triple-end (car nbhd2)) "is named")))
        (list 'terminal (triple-end (car nbhd))))))))))
 
 (yup)
