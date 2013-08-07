@@ -21,7 +21,7 @@
 (define-ftgl ftglRenderFont (_fun _FTGLfont _string _int -> _void))
 (define-ftgl ftglDestroyFont (_fun _FTGLfont -> _void))
 
-(provide my-canvas% box-width box-height box-maj-dim node-width node-height node-maj-dim VERTICAL display-on-screen Thecanvas Info Selected-tree utterance-parent utterance-n node-data whole-tree-selection add-key-evs update-childfuncs set-info enter-insert-mode exit-insert-mode paint-info)
+(provide my-canvas% box-width box-height box-maj-dim node-width node-height node-maj-dim VERTICAL display-on-screen Thecanvas Info Selected-tree utterance-parent utterance-n node-data node-laddr whole-tree-selection whole-tree-open set-whole-tree-open! add-key-evs key-evs update-childfuncs set-info enter-link-mode exit-link-mode enter-insert-mode exit-insert-mode paint-info go)
 
 (struct node (data laddr prom-args text-func) #:transparent)
 (struct utterance (n x y w h text-w text-h args clr) #:transparent)
@@ -129,27 +129,27 @@
          (set! Trees (remove Selected-tree Trees))
          (set! Selected-tree next)))
 
-  (go (dir tree)
-   (let ((new-sel (apply find-utterance (whole-tree-utterance-tree tree)
-                   (cond
-                    ((eq? dir 'left)
-                     (list (+ (utterance-x (whole-tree-selection tree)) -1) (utterance-y (whole-tree-selection tree)) tree))
-                    ((eq? dir 'down)
-                     (list (utterance-x (whole-tree-selection tree)) (+ (utterance-y (whole-tree-selection tree)) (utterance-h (whole-tree-selection tree)) 1) tree))
-                    ((eq? dir 'up)
-                     (list (utterance-x (whole-tree-selection tree)) (+ (utterance-y (whole-tree-selection tree)) -1) tree))
-                    ((eq? dir 'right)
-                     (list (+ (utterance-x (whole-tree-selection tree)) (utterance-w (whole-tree-selection tree)) 1) (utterance-y (whole-tree-selection tree)) tree))))))
-   (select (if new-sel new-sel (whole-tree-selection tree)) tree))
-   (generate-utterance-tree tree)
-   (send Thecanvas on-paint))
-
   (zoom-out (event)
    (set-whole-tree-offset-x! Selected-tree (- (utterance-y (whole-tree-selection Selected-tree))))
    (set-whole-tree-offset-y! Selected-tree (- (utterance-x (whole-tree-selection Selected-tree))))
    (set-whole-tree-zoom! Selected-tree (if (= (whole-tree-zoom Selected-tree) 1) (if VERTICAL (/ (whole-tree-h Selected-tree) (utterance-h (whole-tree-selection Selected-tree))) (/ (whole-tree-w Selected-tree) (utterance-w (whole-tree-selection Selected-tree) ))) 1))
    (send Thecanvas on-paint))
   ))
+
+(define (go dir tree)
+ (let ((new-sel (apply find-utterance (whole-tree-utterance-tree tree)
+                 (cond
+                  ((eq? dir 'left)
+                   (list (+ (utterance-x (whole-tree-selection tree)) -1) (utterance-y (whole-tree-selection tree)) tree))
+                  ((eq? dir 'down)
+                   (list (utterance-x (whole-tree-selection tree)) (+ (utterance-y (whole-tree-selection tree)) (utterance-h (whole-tree-selection tree)) 1) tree))
+                  ((eq? dir 'up)
+                   (list (utterance-x (whole-tree-selection tree)) (+ (utterance-y (whole-tree-selection tree)) -1) tree))
+                  ((eq? dir 'right)
+                   (list (+ (utterance-x (whole-tree-selection tree)) (utterance-w (whole-tree-selection tree)) 1) (utterance-y (whole-tree-selection tree)) tree))))))
+ (select (if new-sel new-sel (whole-tree-selection tree)) tree))
+ (generate-utterance-tree tree)
+ (send Thecanvas on-paint))
 
 (define mouse-evs
  (hash
@@ -194,7 +194,7 @@
                               (map
                                node-laddr
                                (if deep?
-                                (flatten (cons (utterance-n u) (map (lambda (a) (node-deep-args a (compose (curry eq? 'named) cadr node-data))) (node-args (utterance-n u)))))
+                                (flatten (cons (utterance-n u) (map (lambda (a) (node-deep-args a (compose (curry eq? 'scoped) cadr node-data))) (node-args (utterance-n u)))))
 ;                                                         (lambda (n) #f
                                 ;(null? (ess-man-args (node-man n)))
                                 (letrec
@@ -333,14 +333,21 @@
         '())))
 
    (define/override (on-char event)
-    (if INSERTMODE
-     ((hash-ref key-evs 'insert) event)
-     (if (hash-has-key? key-evs (send event get-key-code))
-      ((hash-ref key-evs (send event get-key-code)) event)
-      '())))
+    (cond
+     (INSERTMODE ((hash-ref key-evs 'insert) event))
+     (LINKMODE ((hash-ref key-evs 'link) event))
+     ((hash-has-key? key-evs (send event get-key-code))
+      ((hash-ref key-evs (send event get-key-code)) event))
+     (#t '())))
   
    (super-instantiate () (style '(gl)))))
   ))
+
+(define LINKMODE #f)
+
+(define (enter-link-mode) (set! LINKMODE #t))
+
+(define (exit-link-mode) (set! LINKMODE #f))
 
 (define INSERTMODE #f)
 
