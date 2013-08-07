@@ -164,11 +164,28 @@
     (exit-link-mode))
    (#t '()))))
 
+(define (delete-link event)
+ (let* ((id (car (node-data (utterance-n (whole-tree-selection Selected-tree)))))
+        (parent-id (car (node-data (utterance-n (utterance-parent (whole-tree-selection Selected-tree) Selected-tree)))))
+        (child (member (triple parent-id "has child" id) (graph-edges G)))
+        (call (member (triple parent-id "is call to" id) (graph-edges G)))
+        (arg (member (triple parent-id "has arg" id) (graph-edges G))))
+  (cond
+   (child
+    (set! G (graph (graph-vertices G) (remove (car child) (graph-edges G)))))
+   (call
+    (set! G (graph (graph-vertices G) (remove (car call) (graph-edges G)))))
+   (arg
+    (set! G (graph (graph-vertices G) (remove (car arg) (graph-edges G)))))
+   (#t '())))
+ (update-childfuncs child-fun))
+
 (add-key-evs (list #\space add-sibling
                    #\( add-child
                    #\i insert-text
-                   'insert handle-insert
                    #\c add-link
+                   #\d delete-link
+                   'insert handle-insert
                    'link handle-link))
 
 (define (graph->file g)
