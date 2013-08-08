@@ -1,7 +1,5 @@
 #lang racket
 
-; when establing a call, make sure that even the original reference is a call
-; fix set of open laddrs
 ; on enter, make selection still visible (generate-utterance-tree ?)
 ; get next-id from graph
 ; allow other types to be typed in (string, boolean, symbol, etc)
@@ -89,8 +87,20 @@
                    (append (list (triple parent-id "has arg" Next-id) (triple Next-id "is written" 'wahaha)) (graph-edges G)))
                   (replace (triple parent-id "has child" id) (list (triple parent-id "has child" id) (triple parent-id "has child" Next-id) (triple Next-id "is written" 'mwahaha)) (graph-edges G))))))
  (set! Next-id (+ 1 Next-id))
+ (set-whole-tree-open! Selected-tree (set-union (list->set (set-map (whole-tree-open Selected-tree) (curry adjust-laddr (node-laddr (utterance-n (whole-tree-selection Selected-tree)))))) (set (node-laddr (utterance-n (whole-tree-selection Selected-tree))))))
  (update-childfuncs child-fun)
  (go 'right Selected-tree))
+
+(define (adjust-laddr key laddr)
+ (if (null? laddr)
+  '()
+  (if (null? (cdr key))
+   (if (<= (car key) (car laddr))
+    (cons (+ 1 (car laddr)) (cdr laddr))
+    laddr)
+   (if (eq? (car key) (car laddr))
+    (cons (car laddr) (adjust-laddr (cdr key) (cdr laddr)))
+    laddr))))
 
 (define (add-child event)
  (set! G (graph (graph-vertices G)
@@ -141,7 +151,7 @@
                 (let* ((id (selected-id Selected-tree))
                        (nbhd (is-written-t id))
                        (nbhd2 (graph-neighborhood-edge-forward G id "is named"))
-                       (res (if (char-numeric? (car (string->list INSERTTEXT))) (string->number INSERTTEXT) (string->symbol INSERTTEXT))))
+                       (res (if (char-numeric? (car (string->list (if (eq? "" INSERTTEXT) "-" INSERTTEXT)))) (string->number INSERTTEXT) (string->symbol (if (eq? "" INSERTTEXT) "-" INSERTTEXT)))))
                  (if nbhd
                   (replace nbhd (list (triple id "is written" res)) (graph-edges G))
                   (if (null? nbhd2)
