@@ -1,5 +1,10 @@
 #lang racket
 
+; when establing a call, make sure that even the original reference is a call
+; fix set of open laddrs
+; on enter, make selection still visible (generate-utterance-tree ?)
+; get next-id from graph
+
 (require "graph.ss" "find.ss" "disp.ss")
 (require racket/set)
 
@@ -133,12 +138,13 @@
  (set! G (graph (graph-vertices G)
                 (let* ((id (car (node-data (utterance-n (whole-tree-selection Selected-tree)))))
                        (nbhd (graph-neighborhood-edge-forward G id "is written"))
-                       (nbhd2 (graph-neighborhood-edge-forward G id "is named")))
+                       (nbhd2 (graph-neighborhood-edge-forward G id "is named"))
+                       (res (if (char-numeric? (car (string->list INSERTTEXT))) (string->number INSERTTEXT) (string->symbol INSERTTEXT))))
                  (if (null? nbhd)
                   (if (null? nbhd2)
-                   (append (graph-edges G) (list (triple id "is named" (string->symbol INSERTTEXT))))
-                   (append (takef (graph-edges G) (negate (curry equal? (car nbhd2)))) (list (triple id "is named" (string->symbol INSERTTEXT))) (cdr (member (car nbhd2) (graph-edges G)))))
-                  (append (takef (graph-edges G) (negate (curry equal? (car nbhd)))) (list (triple id "is written" (string->symbol INSERTTEXT))) (cdr (member (car nbhd) (graph-edges G))))))))
+                   (append (graph-edges G) (list (triple id "is named" res)))
+                   (append (takef (graph-edges G) (negate (curry equal? (car nbhd2)))) (list (triple id "is named" res)) (cdr (member (car nbhd2) (graph-edges G)))))
+                  (append (takef (graph-edges G) (negate (curry equal? (car nbhd)))) (list (triple id "is written" res)) (cdr (member (car nbhd) (graph-edges G))))))))
  (update-childfuncs child-fun))
 
 (define LINK1 '())
@@ -180,11 +186,14 @@
    (#t '())))
  (update-childfuncs child-fun))
 
+(define (reify-code event) (display (reify G 0)) (newline))
+
 (add-key-evs (list #\space add-sibling
                    #\( add-child
                    #\i insert-text
                    #\c add-link
                    #\d delete-link
+                   #\r reify-code
                    'insert handle-insert
                    'link handle-link))
 
@@ -208,8 +217,6 @@
      (map
       (lambda (t) (format "(define (f~s ~a) ~a)" (triple-start t) (string-join (map (compose (curry format "~s") triple-end) (graph-neighborhood-edge-forward G (triple-start t) "has argname")) " ") (reify g (triple-start t))))
       has-scope)))
-   (if (not (null? is-written))
-    (format "~s" (triple-end (car is-written)))
     (if (not (null? has-child))
      (string-join
       (map (curry reify g) (map triple-end has-child))
@@ -222,7 +229,9 @@
        " "
        #:before-first (format "(f~s " (triple-end (car is-call-to)))
        #:after-last ")")
-      (begin (display "unable to categorize id:  ") (display id) (newline))))))))
+      (if (not (null? is-written))
+       (format "~s" (triple-end (car is-written)))
+       (begin (display "unable to categorize id:  ") (display id) (newline))))))))
 
 ;(reify G 0)
 

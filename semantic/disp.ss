@@ -484,7 +484,8 @@
  (map (lambda (t) (set-whole-tree-n-tree! t (root->node (node-data (whole-tree-n-tree t)) childfunc (node-laddr (whole-tree-n-tree t))))) (cdr Trees))
  (map
   (lambda (tree) 
-    (set-whole-tree-utterance-tree! tree (node->utterance (whole-tree-n-tree tree) (utterance-x (whole-tree-utterance-tree tree)) (utterance-y (whole-tree-utterance-tree tree)) (if VERTICAL (node-width (whole-tree-n-tree tree) tree) -1) 0 1 tree)))
+;    (set-whole-tree-utterance-tree! tree (node->utterance (whole-tree-n-tree tree) (utterance-x (whole-tree-utterance-tree tree)) (utterance-y (whole-tree-utterance-tree tree)) (if VERTICAL (node-width (whole-tree-n-tree tree) tree) -1) 0 1 tree))
+    (generate-utterance-tree tree))
   (cdr Trees))
  (send Thecanvas on-paint))
 
