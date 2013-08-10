@@ -183,8 +183,6 @@
 (define (selected-parent-id tree)
  (car (node-data (utterance-node (utterance-parent (whole-tree-selection-u tree) tree)))))
 
-; XXX change other argumemts from has-child to has-arg.
-
 (define (handle-link event)
  (let ((c (send event get-key-code)))
   (cond
@@ -199,10 +197,8 @@
        (if (null? nbhd2)
         (set! G (graph (graph-vertices G) (append (remove (is-written-t LINK1) (graph-edges G)) (list (triple LINK1 "is call to" link2) (triple link2 "has scope" (selected-parent-id Selected-tree))))))
         (begin
-         (display (whole-tree-open Selected-tree)) (newline)
          (set-whole-tree-open! Selected-tree (set-union (set (whole-tree-selection Selected-tree)) (list->set (set-map (whole-tree-open Selected-tree) (curry adjust-laddr-interlocutor link2 (last (whole-tree-selection Selected-tree)) (whole-tree-utterance-tree Selected-tree))))))
-         (display (whole-tree-open Selected-tree)) (newline)
-         (set! G (graph (graph-vertices G) (append (replace (car nbhd2) (list (triple (triple-start (car nbhd2)) "has child" Next-id) (triple Next-id "is call to" link2)) (remove (is-written-t LINK1) (graph-edges G))) (list (triple LINK1 "is call to" link2) (triple link2 "has scope" (selected-parent-id Selected-tree))))))
+         (set! G (graph (graph-vertices G) (append (foldl (lambda (t res) (replace t (list (triple (triple-start (car nbhd2) "has arg" (triple-end t)))) res)) (replace (car nbhd2) (list (triple (triple-start (car nbhd2)) "has child" Next-id) (triple Next-id "is call to" link2)) (remove (is-written-t LINK1) (graph-edges G))) (cdr nbhd2)) (list (triple LINK1 "is call to" link2) (triple link2 "has scope" (selected-parent-id Selected-tree))))))
          (set! Next-id (+ 1 Next-id)))))))
     (update-childfuncs child-fun)
     (exit-link-mode))
@@ -228,11 +224,7 @@
     (if (zero? (last laddr))
      (set-whole-tree-selection! Selected-tree (adjust-laddr-del id (last laddr) (whole-tree-utterance-tree Selected-tree) (drop-right laddr 1)))
      (set-whole-tree-selection! Selected-tree (adjust-laddr-del id (last laddr) (whole-tree-utterance-tree Selected-tree) (append (drop-right laddr 1) (list (+ -1 (last laddr)))))))))
-;  (set-whole-tree-open! Selected-tree (set-subtract (whole-tree-open Selected-tree) (set-remove (list->set (set-map (whole-tree-open Selected-tree) (curry remove-laddr-del id (last (node-laddr (utterance-node sel))) (whole-tree-utterance-tree Selected-tree)))) '())))
-  (display (whole-tree-open Selected-tree)) (newline)
-  (display (set-remove (list->set (set-map (whole-tree-open Selected-tree) (curry remove-laddr-del-aux id (last (node-laddr (utterance-node sel))) (whole-tree-utterance-tree Selected-tree)))) '())) (newline)
   (set-whole-tree-open! Selected-tree (list->set (set-map (set-subtract (whole-tree-open Selected-tree) (set-remove (list->set (set-map (whole-tree-open Selected-tree) (curry remove-laddr-del-aux id (last (node-laddr (utterance-node sel))) (whole-tree-utterance-tree Selected-tree)))) '())) (curry adjust-laddr-del id (last (node-laddr (utterance-node sel))) (whole-tree-utterance-tree Selected-tree)))))
-  (display (whole-tree-open Selected-tree)) (newline)
   (cond
    (child
     (set! G (graph (graph-vertices G) (remove (car child) (graph-edges G)))))
