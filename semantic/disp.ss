@@ -42,7 +42,7 @@
                        (let* ((dummy-n (node '(0 'dummy "dummy" '()) '() (delay '()) (lambda (_) "t")))
                               (dummy-utterance (utterance dummy-n 0 0 0 0 0 0 '() (cons '(0 0 0) '(0 0 0)))))
                         (list dummy-n (lambda (a) '()) dummy-utterance (set) '() 600 30 (- WIDTH 600) 300 0 0 1)))))
-(define Selected-tree (car Trees))
+(define Selected-tree (cadr Trees))
 (define Bar-tree (cadr Trees))
 
 (define COLORSCHEME 'alternate)
