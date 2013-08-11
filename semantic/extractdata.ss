@@ -204,6 +204,7 @@
    (car nbhd))))
 
 (define LINK1 '())
+(define PARENTLINK1 '())
 
 (define (add-link event)
  (set! LINK1 (car (node-data (utterance-node (whole-tree-selection-u Selected-tree)))))
@@ -214,6 +215,33 @@
 
 (define (selected-parent-id tree)
  (car (node-data (utterance-node (utterance-parent (whole-tree-selection-u tree) tree)))))
+
+(define (add-var event)
+ (set! LINK1 (selected-id Selected-tree))
+ (set! PARENTLINK1 (selected-parent-id Selected-tree))
+ (enter-var-mode))
+
+(define (handle-var event)
+ (with
+  ((let ((c (send event get-key-code)))
+    (cond
+     ((member c '(#\h #\j #\k #\l))
+      ((hash-ref key-evs c) event))
+     ((eq? c #\return)
+      (make-var))
+     (#t '()))))
+
+  (make-var ()
+   (let* ((link2 (selected-id Selected-tree))
+          (parent-link1 (selected-parent-id Selected-tree)))
+    (with
+     ((swap-child)
+      (update-childfuncs child-fun)
+      (exit-var-mode))
+
+     (swap-child ()
+      (set! G (graph (graph-vertices G) (replace (triple PARENTLINK1 "has child" LINK1) (list (triple PARENTLINK1 "has child" link2)) (graph-edges G))))))))))
+
 
 (define (handle-link event)
  (with
@@ -325,10 +353,12 @@
                    #\( add-child
                    #\i insert-text
                    #\g add-link
+                   #\v add-var
                    #\d delete-link
                    #\r reify-code
                    'insert handle-insert
-                   'link handle-link))
+                   'link handle-link
+                   'var handle-var))
 
 (define (graph->file g)
  (call-with-output-file GRFILE #:exists 'truncate (lambda (f) (write g f))))

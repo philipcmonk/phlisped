@@ -21,7 +21,7 @@
 (define-ftgl ftglRenderFont (_fun _FTGLfont _string _int -> _void))
 (define-ftgl ftglDestroyFont (_fun _FTGLfont -> _void))
 
-(provide my-canvas% box-width box-height box-maj-dim node-width node-height node-maj-dim VERTICAL display-on-screen Thecanvas Info Selected-tree utterance-parent utterance-node utterance-args node-data node-laddr whole-tree-selection-u whole-tree-selection set-whole-tree-selection! whole-tree-open set-whole-tree-open! whole-tree-utterance-tree add-key-evs key-evs update-childfuncs set-info enter-link-mode exit-link-mode enter-insert-mode exit-insert-mode paint-info go find-utterance-from-laddr-safe)
+(provide my-canvas% box-width box-height box-maj-dim node-width node-height node-maj-dim VERTICAL display-on-screen Thecanvas Info Selected-tree utterance-parent utterance-node utterance-args node-data node-laddr whole-tree-selection-u whole-tree-selection set-whole-tree-selection! whole-tree-open set-whole-tree-open! whole-tree-utterance-tree add-key-evs key-evs update-childfuncs set-info enter-insert-mode exit-insert-mode enter-link-mode exit-link-mode enter-var-mode exit-var-mode paint-info go find-utterance-from-laddr-safe)
 
 (struct node (data laddr prom-args text-func) #:transparent)
 (struct utterance (node x y w h text-w text-h args clr) #:transparent)
@@ -347,6 +347,7 @@
     (cond
      (INSERTMODE ((hash-ref key-evs 'insert) event))
      (LINKMODE ((hash-ref key-evs 'link) event))
+     (VARMODE ((hash-ref key-evs 'var) event))
      ((hash-has-key? key-evs (send event get-key-code))
       ((hash-ref key-evs (send event get-key-code)) event))
      (#t '())))
@@ -354,17 +355,23 @@
    (super-instantiate () (style '(gl)))))
   ))
 
+(define INSERTMODE #f)
+
+(define (enter-insert-mode) (set! INSERTMODE #t))
+
+(define (exit-insert-mode) (set! INSERTMODE #f))
+
 (define LINKMODE #f)
 
 (define (enter-link-mode) (set! LINKMODE #t))
 
 (define (exit-link-mode) (set! LINKMODE #f))
 
-(define INSERTMODE #f)
+(define VARMODE #f)
 
-(define (enter-insert-mode) (set! INSERTMODE #t))
+(define (enter-var-mode) (set! VARMODE #t))
 
-(define (exit-insert-mode) (set! INSERTMODE #f))
+(define (exit-var-mode) (set! VARMODE #f))
 
 (define (paint-bar u)
  (with
