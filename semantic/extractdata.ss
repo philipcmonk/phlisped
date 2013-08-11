@@ -323,6 +323,14 @@
       (set! G (graph (graph-vertices G) (append (foldl (lambda (t res) (replace t (list (triple (triple-start (car has-child) "has arg" (triple-end t)))) res)) (replace (car has-child) (list (triple (triple-start (car has-child)) "has child" Next-id) (triple Next-id "is call to" link2)) (remove (is-written-t LINK1) (graph-edges G))) (cdr has-child)) (list (triple LINK1 "is call to" link2) (triple link2 "has scope" (selected-parent-id Selected-tree))))))
       (set! Next-id (+ 1 Next-id))))))))
 
+(define (interlocute-lambda event)
+ (let ((id (selected-id Selected-tree))
+       (parent-id (selected-parent-id Selected-tree)))
+  (set-whole-tree-open! Selected-tree (set-union (set (whole-tree-selection Selected-tree)) (list->set (set-map (whole-tree-open Selected-tree) (curry adjust-laddr-interlocutor id (last (whole-tree-selection Selected-tree)) (whole-tree-utterance-tree Selected-tree))))))
+  (set! G (graph (graph-vertices G) (replace (triple parent-id "has child" id) (list (triple parent-id "has child" Next-id) (triple Next-id "is call to" id) (triple id "has scope" parent-id)) (graph-edges G))))
+  (set! Next-id (+ 1 Next-id))
+  (update-childfuncs child-fun)))
+
 (define (adjust-laddr-interlocutor id pos u laddr)
  (if (null? laddr)
   '()
@@ -403,6 +411,7 @@
                    #\d delete-link
                    #\r reify-code
                    #\s set-scope
+                   #\L interlocute-lambda
                    'insert handle-insert
                    'link handle-link
                    'var handle-var
@@ -426,16 +435,22 @@
   (string-append
    (if (null? has-env)
     ""
-    (apply string-append
-     (map
-      (lambda (t) (format "(define v~s ~a)" (triple-start t) (reify g (triple-end (car (graph-neighborhood-edge-forward g (triple-start t) "is defined as"))))))
-      has-env)))
+    (string-append
+     "(let ("
+     (apply string-append
+      (map
+       (lambda (t) (format "(v~s ~a)" (triple-start t) (reify g (triple-end (car (graph-neighborhood-edge-forward g (triple-start t) "is defined as"))))))
+       has-env))
+     ") "))
    (if (null? has-scope)
     ""
-    (apply string-append
-     (map
-      (lambda (t) (format "(define (f~s ~a) ~a)" (triple-start t) (string-join (map (compose (curry format "~s") triple-end) (graph-neighborhood-edge-forward g (triple-start t) "has argname")) " ") (reify g (triple-start t))))
-      has-scope)))
+    (string-append
+     "(letrec ("
+     (apply string-append
+      (map
+       (lambda (t) (format "(f~s (lambda (~a) ~a))" (triple-start t) (string-join (map (compose (curry format "~s") triple-end) (graph-neighborhood-edge-forward g (triple-start t) "has argname")) " ") (reify g (triple-start t))))
+       has-scope))
+     ") "))
    (if (not (null? has-child))
     (string-join
      (map (curry reify g) (map triple-end has-child))
@@ -452,7 +467,13 @@
       (format "v~s" id)
       (if is-written
        (format "~s" (triple-end is-written))
-       (begin (display "unable to categorize id:  ") (display id) (newline)))))))))
+       (begin (display "unable to categorize id:  ") (display id) (newline))))))
+   (if (null? has-scope)
+    ""
+    ")")
+   (if (null? has-env)
+    ""
+    ")"))))
 
 ;(reify G 0)
 
