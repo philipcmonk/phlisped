@@ -415,7 +415,8 @@
    (paint-utterance-data)
    (gl-raster-pos 0 110)
    (paint-neighborhood)
-   (set-tree))
+;   (set-tree))
+   )
 
   (paint-name ()
    (ftglRenderFont Font ((node-text-func (utterance-node u)) (utterance-node u)) 65535))

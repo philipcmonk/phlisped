@@ -348,10 +348,10 @@
     (with
      ((if is-func
        (add-call-to)
-       (let ((has-child (graph-neighborhood-edge-backward G link2 "has child")))
-        (if (null? has-child)
-         (add-call-to-plus-scope)
-         (add-call-to-and-change-original has-child))))
+;       (let ((has-child (graph-neighborhood-edge-backward G link2 "has child")))
+;        (if (null? has-child)
+         (add-call-to-plus-scope))
+;         (add-call-to-and-change-original has-child))))
       (update-childfuncs child-fun)
       (exit-link-mode))
 
