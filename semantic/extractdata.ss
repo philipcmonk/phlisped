@@ -218,6 +218,37 @@
 (define (selected-parent-id tree)
  (car (node-data (utterance-node (utterance-parent (whole-tree-selection-u tree) tree)))))
 
+(define (set-scope event)
+ (set! LINK1 (selected-id Selected-tree))
+ (set! LINK1ADDR (whole-tree-selection Selected-tree))
+ (enter-scope-mode))
+
+(define (handle-scope event)
+ (with
+  ((let ((c (send event get-key-code)))
+    (cond
+     ((member c '(#\h #\j #\k #\l))
+      ((hash-ref key-evs c) event))
+     ((eq? c #\return)
+      (make-scope))
+     (#t '()))))
+
+  (make-scope ()
+   (let* ((link2 (selected-id Selected-tree)))
+    (with
+     ((swap-scope)
+      (update-childfuncs child-fun)
+      (exit-scope-mode))
+
+     (swap-scope ()
+      (let ((has-scope (graph-neighborhood-edge-forward G LINK1 "has scope"))
+            (has-env (graph-neighborhood-edge-forward G LINK1 "has env")))
+       (if (not (null? has-scope))
+        (set! G (graph (graph-vertices G) (replace (car has-scope) (list (triple LINK1 "has scope" link2)) (graph-edges G))))
+        (if (not (null? has-env))
+         (set! G (graph (graph-vertices G) (replace (car has-env) (list (triple LINK1 "has env" link2)) (graph-edges G))))
+         '())))))))))
+
 (define (add-var event)
  (set! LINK1 (selected-id Selected-tree))
  (set! PARENTLINK1 (selected-parent-id Selected-tree))
@@ -371,9 +402,11 @@
                    #\v add-var
                    #\d delete-link
                    #\r reify-code
+                   #\s set-scope
                    'insert handle-insert
                    'link handle-link
-                   'var handle-var))
+                   'var handle-var
+                   'scope handle-scope))
 
 (define (graph->file g)
  (call-with-output-file GRFILE #:exists 'truncate (lambda (f) (write g f))))
@@ -391,18 +424,18 @@
        (is-defined-as (graph-neighborhood-edge-forward g id "is defined as"))
        (has-env (graph-neighborhood-edge-backward g id "has env")))
   (string-append
-   (if (null? has-scope)
-    ""
-    (apply string-append
-     (map
-      (lambda (t) (format "(define (f~s ~a) ~a)" (triple-start t) (string-join (map (compose (curry format "~s") triple-end) (graph-neighborhood-edge-forward g (triple-start t) "has argname")) " ") (reify g (triple-start t))))
-      has-scope)))
    (if (null? has-env)
     ""
     (apply string-append
      (map
       (lambda (t) (format "(define v~s ~a)" (triple-start t) (reify g (triple-end (car (graph-neighborhood-edge-forward g (triple-start t) "is defined as"))))))
       has-env)))
+   (if (null? has-scope)
+    ""
+    (apply string-append
+     (map
+      (lambda (t) (format "(define (f~s ~a) ~a)" (triple-start t) (string-join (map (compose (curry format "~s") triple-end) (graph-neighborhood-edge-forward g (triple-start t) "has argname")) " ") (reify g (triple-start t))))
+      has-scope)))
    (if (not (null? has-child))
     (string-join
      (map (curry reify g) (map triple-end has-child))
