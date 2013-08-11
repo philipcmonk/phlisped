@@ -204,7 +204,7 @@
    (car nbhd))))
 
 (define LINK1 '())
-(define PARENTLINK1 '())
+(define LINK1PARENT '())
 (define LINK1ADDR '())
 
 (define (add-link event)
@@ -217,6 +217,50 @@
 
 (define (selected-parent-id tree)
  (car (node-data (utterance-node (utterance-parent (whole-tree-selection-u tree) tree)))))
+
+(define (argify event)
+ (set! LINK1 (selected-id Selected-tree))
+ (set! LINK1PARENT (selected-parent-id Selected-tree))
+ (set! LINK1ADDR (whole-tree-selection Selected-tree))
+ (enter-argify-mode))
+
+(define (handle-argify event)
+ (with
+  ((let ((c (send event get-key-code)))
+    (cond
+     ((member c '(#\h #\j #\k #\l))
+      ((hash-ref key-evs c) event))
+     ((eq? c #\return)
+      (make-arg))
+     (#t '()))))
+
+  (make-arg ()
+   (let* ((link2 (selected-id Selected-tree))
+          (hijito (triple-end (car (graph-neighborhood-edge-forward G LINK1 "is call to")))))
+    (with
+     ((add-arg-to-call)
+      (convert-var-to-arg)
+      (set! Next-id (+ 1 Next-id))
+      (update-childfuncs child-fun)
+      (exit-argify-mode))
+
+     (add-arg-to-call ()
+      (set! G (graph (graph-vertices G) (append (graph-edges G) (list (triple LINK1 "has arg" link2) (triple hijito "has formal arg" Next-id) (triple Next-id "is written" 'arger) (triple Next-id "is reified as" (string->symbol (format "a~s" Next-id))))))))
+
+     (convert-var-to-arg ()
+      (set! G (graph (graph-vertices G) (swap hijito (graph-edges G)))))
+
+     (swap (in-id res)
+      (foldl
+       swap
+       (foldl
+        (lambda (t res)
+         (if (eq? (triple-end t) link2)
+          (replace t (list (triple in-id "has child" Next-id)) res)
+          res))
+        res
+        (graph-neighborhood-edge-forward G in-id "has child"))
+       (map triple-end (graph-neighborhood-edge-forward G in-id "has child")))))))))
 
 (define (set-scope event)
  (set! LINK1 (selected-id Selected-tree))
@@ -251,7 +295,7 @@
 
 (define (add-var event)
  (set! LINK1 (selected-id Selected-tree))
- (set! PARENTLINK1 (selected-parent-id Selected-tree))
+ (set! LINK1PARENT (selected-parent-id Selected-tree))
  (set! LINK1ADDR (whole-tree-selection Selected-tree))
  (enter-var-mode))
 
@@ -279,13 +323,13 @@
       (not (null? (graph-neighborhood-edge-forward G link2 "is defined as"))))
 
      (swap-child ()
-      (set! G (graph (graph-vertices G) (replace (triple PARENTLINK1 "has child" LINK1) (list (triple PARENTLINK1 "has child" link2)) (graph-edges G)))))
+      (set! G (graph (graph-vertices G) (replace (triple LINK1PARENT "has child" LINK1) (list (triple LINK1PARENT "has child" link2)) (graph-edges G)))))
 
      (interlocute-and-swap ()
       (set-whole-tree-selection! Selected-tree LINK1ADDR)
       (set-whole-tree-open! Selected-tree (list->set (set-map (whole-tree-open Selected-tree) (curry adjust-laddr-interlocutor link2 (last (whole-tree-selection Selected-tree)) (whole-tree-utterance-tree Selected-tree)))))
       (set! G (graph (graph-vertices G) (replace (triple parent-link2 "has child" link2) (list (triple parent-link2 "has child" Next-id) (triple Next-id "is defined as" link2) (triple Next-id "has env" parent-link2)) (graph-edges G))))
-      (set! G (graph (graph-vertices G) (replace (triple PARENTLINK1 "has child" LINK1) (list (triple PARENTLINK1 "has child" Next-id)) (graph-edges G))))
+      (set! G (graph (graph-vertices G) (replace (triple LINK1PARENT "has child" LINK1) (list (triple LINK1PARENT "has child" Next-id)) (graph-edges G))))
       (set! Next-id (+ 1 Next-id))))))))
 
 (define (handle-link event)
@@ -412,10 +456,12 @@
                    #\r reify-code
                    #\s set-scope
                    #\L interlocute-lambda
+                   #\a argify
                    'insert handle-insert
                    'link handle-link
                    'var handle-var
-                   'scope handle-scope))
+                   'scope handle-scope
+                   'argify handle-argify))
 
 (define (graph->file g)
  (call-with-output-file GRFILE #:exists 'truncate (lambda (f) (write g f))))
@@ -431,7 +477,8 @@
        (is-written (is-written-t id))
        (has-scope (graph-neighborhood-edge-backward g id "has scope"))
        (is-defined-as (graph-neighborhood-edge-forward g id "is defined as"))
-       (has-env (graph-neighborhood-edge-backward g id "has env")))
+       (has-env (graph-neighborhood-edge-backward g id "has env"))
+       (is-reified-as (graph-neighborhood-edge-forward g id "is reified as")))
   (string-append
    (if (null? has-env)
     ""
@@ -448,7 +495,7 @@
      "(letrec ("
      (apply string-append
       (map
-       (lambda (t) (format "(f~s (lambda (~a) ~a))" (triple-start t) (string-join (map (compose (curry format "~s") triple-end) (graph-neighborhood-edge-forward g (triple-start t) "has argname")) " ") (reify g (triple-start t))))
+       (lambda (t) (format "(f~s (lambda (~a) ~a))" (triple-start t) (string-join (map (compose (curry format "a~s") triple-end) (graph-neighborhood-edge-forward g (triple-start t) "has formal arg")) " ") (reify g (triple-start t))))
        has-scope))
      ") "))
    (if (not (null? has-child))
@@ -465,9 +512,11 @@
       #:after-last ")")
      (if (not (null? is-defined-as))
       (format "v~s" id)
-      (if is-written
-       (format "~s" (triple-end is-written))
-       (begin (display "unable to categorize id:  ") (display id) (newline))))))
+      (if (not (null? is-reified-as))
+       (format "~s" (triple-end (car is-reified-as)))
+       (if is-written
+        (format "~s" (triple-end is-written))
+        (begin (display "unable to categorize id:  ") (display id) (newline)))))))
    (if (null? has-scope)
     ""
     ")")
