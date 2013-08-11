@@ -28,13 +28,22 @@
 (struct whole-tree (n-tree childfunc utterance-tree open selection x y w h offset-x offset-y zoom) #:mutable)
 
 (define (whole-tree-selection-u tree)
- (find-utterance-from-laddr (whole-tree-utterance-tree tree) (whole-tree-selection tree)))
+ (find-utterance-from-laddr-safe (whole-tree-utterance-tree tree) (whole-tree-selection tree)))
 
-(define Trees (list (apply whole-tree 
-  (let* ((dummy-n (node '(0 . "") '() (delay '()) (lambda (_) "t")))
-         (dummy-utterance (utterance dummy-n 0 0 0 0 0 0 '() (cons '(0 0 0) '(0 0 0)))))
-   (list dummy-n (lambda (a) '()) dummy-utterance (set) dummy-utterance 0 0 0 0 0 0 1)))))
+(define WIDTH (* 1 1600))
+(define HEIGHT 899)
+
+(define Trees (list
+                (apply whole-tree 
+                       (let* ((dummy-n (node '(0 'dummy "dummy" '()) '() (delay '()) (lambda (_) "t")))
+                              (dummy-utterance (utterance dummy-n 0 0 0 0 0 0 '() (cons '(0 0 0) '(0 0 0)))))
+                        (list dummy-n (lambda (a) '()) dummy-utterance (set) '() 0 0 0 0 0 0 1)))
+                (apply whole-tree 
+                       (let* ((dummy-n (node '(0 'dummy "dummy" '()) '() (delay '()) (lambda (_) "t")))
+                              (dummy-utterance (utterance dummy-n 0 0 0 0 0 0 '() (cons '(0 0 0) '(0 0 0)))))
+                        (list dummy-n (lambda (a) '()) dummy-utterance (set) '() 600 30 (- WIDTH 600) 300 0 0 1)))))
 (define Selected-tree (car Trees))
+(define Bar-tree (cadr Trees))
 
 (define COLORSCHEME 'alternate)
 (define COLOR1 (cons '(255 255 255) '(0 0 127)))
@@ -53,9 +62,6 @@
 (define COLORRANGES '(127 0 -127))
 (define FGCOLOR '(255 255 255))
 (define CELLHEIGHT 25)
-
-(define WIDTH (* 1 1600))
-(define HEIGHT 899)
 
 (define win (new frame% (label "vilisp") (min-width WIDTH) (min-height HEIGHT)))
 
@@ -77,10 +83,10 @@
     #\j (lambda (_) (go 'down Selected-tree))
     #\k (lambda (_) (go 'up Selected-tree))
     #\l (lambda (_) (go 'right Selected-tree))
-    #\o (lambda (_) (open-u (whole-tree-selection-u Selected-tree) #f Selected-tree))
-    #\c (lambda (_) (close-u (whole-tree-selection-u Selected-tree) #f Selected-tree))
-    #\O (lambda (_) (open-u (whole-tree-selection-u Selected-tree) #t Selected-tree))
-    #\C (lambda (_) (close-u (whole-tree-selection-u Selected-tree) #t Selected-tree))
+    #\o (lambda (_) (open-u (whole-tree-selection-u Selected-tree) #f Selected-tree) (send Thecanvas on-paint))
+    #\c (lambda (_) (close-u (whole-tree-selection-u Selected-tree) #f Selected-tree) (send Thecanvas on-paint))
+    #\O (lambda (_) (open-u (whole-tree-selection-u Selected-tree) #t Selected-tree) (send Thecanvas on-paint))
+    #\C (lambda (_) (close-u (whole-tree-selection-u Selected-tree) #t Selected-tree) (send Thecanvas on-paint))
     #\z zoom-out
     'wheel-up (lambda (_) (set-whole-tree-offset-x! Selected-tree (+ SCROLLDIST (whole-tree-offset-x Selected-tree))) (send Thecanvas on-paint))
     'wheel-down (lambda (_) (set-whole-tree-offset-x! Selected-tree (+ (- SCROLLDIST) (whole-tree-offset-x Selected-tree))) (send Thecanvas on-paint))
@@ -109,14 +115,14 @@
    (set! Selected-tree
     (if (send event get-shift-down)
      (let ((r (member Selected-tree (reverse Trees))))
-      (if (null? (cddr r))
+      (if (null? (cdddr r))
        (last Trees)
        (cadr r)))
      (let ((r (member Selected-tree Trees)))
       (if (null? (cdr r))
        (if (null? (cdr Trees))
         (car Trees)
-        (cadr Trees))
+        (caddr Trees))
        (cadr r)))))
    (generate-utterance-tree Selected-tree)
    (send Thecanvas on-paint))
@@ -184,11 +190,13 @@
   'middle-down (lambda (event)
                 (define-mouse-handler (clicked)
                  (select clicked tree)
-                 (close-u (whole-tree-selection-u tree) (send event get-control-down) Selected-tree)))
+                 (close-u (whole-tree-selection-u tree) (send event get-control-down) Selected-tree)
+                 (send Thecanvas on-paint)))
   'right-down (lambda (event)
                (define-mouse-handler (clicked)
                 (select clicked tree)
-                (open-u (whole-tree-selection-u tree) (send event get-control-down) Selected-tree)))
+                (open-u (whole-tree-selection-u tree) (send event get-control-down) Selected-tree)
+                (send Thecanvas on-paint)))
 ))
 
 (define (open-u u deep? tree)
@@ -206,8 +214,7 @@
                                          l
                                          (lam (flatten (map node-args l)))))))
                                  (lam (list (utterance-node u)))))))))
-  (generate-utterance-tree tree)
-  (send Thecanvas on-paint))
+  (generate-utterance-tree tree))
 
 (define (close-u u deep? tree)
  (set-whole-tree-open! tree (set-subtract (whole-tree-open tree)
@@ -230,8 +237,7 @@
                                           l
                                           (lam (flatten (map node-args l)))))))
                                   (lam (list (utterance-node u))))))))))
- (generate-utterance-tree tree)
- (send Thecanvas on-paint))
+ (generate-utterance-tree tree))
 
 (define (node-deep-args n pred)
  (if (pred n) '() (cons n (map (lambda (a) (node-deep-args a pred)) (node-args n)))))
@@ -247,13 +253,15 @@
         (lambda ()
          (gl-clear-color 0.0 0.0 0.0 0.0)
          (gl-clear 'color-buffer-bit)
+
+         (paint-info Info #f)
+         (paint-bar (whole-tree-selection-u Selected-tree))
    
          (gl-enable 'scissor-test)
    
          (for-each paint-tree Trees)
    
          (gl-disable 'scissor-test)
-         (paint-info Info #f)
          (swap-gl-buffers))))
   
       (paint-tree (tree)
@@ -358,6 +366,86 @@
 
 (define (exit-insert-mode) (set! INSERTMODE #f))
 
+(define (paint-bar u)
+ (with
+  ((gl-enable 'scissor-test)
+   (apply gl-scissor (rel->gl Bar-dim))
+   (gl-viewport 0 30 WIDTH 300)
+   (gl-matrix-mode 'projection)
+   (gl-load-identity)
+   (gl-ortho 0 WIDTH 30 330 -1.0 1.0)
+   (gl-clear 'color-buffer-bit)
+   (paint-u)
+   (gl-disable 'scissor-test))
+
+  (paint-u ()
+   (gl-color (/ (car (car INFOCOLOR)) 255) (/ (cadr (car INFOCOLOR)) 255) (/ (caddr (car INFOCOLOR)) 255))
+   (gl-raster-pos 0 310)
+   (paint-name)
+   (gl-raster-pos 0 290)
+   (paint-id)
+   (gl-raster-pos 0 270)
+   (paint-type)
+   (gl-raster-pos 0 250)
+   (paint-open)
+   (gl-raster-pos 0 230)
+   (paint-laddr)
+   (gl-raster-pos 0 210)
+   (paint-utterance-data)
+   (gl-raster-pos 0 110)
+   (paint-neighborhood)
+   (set-tree))
+
+  (paint-name ()
+   (ftglRenderFont Font ((node-text-func (utterance-node u)) (utterance-node u)) 65535))
+
+  (paint-id ()
+   (ftglRenderFont Font (format "id:  ~a" (car (node-data (utterance-node u)))) 65535))
+
+  (paint-type ()
+   (ftglRenderFont Font (format "type:  ~a" (cadr (node-data (utterance-node u)))) 65535))
+
+  (paint-open ()
+   (ftglRenderFont Font (if (open? (utterance-node u) Selected-tree) "open" "closed") 65535))
+
+  (paint-laddr ()
+   (ftglRenderFont Font (format "laddr:  ~a" (node-laddr (utterance-node u))) 65535))
+
+  (paint-utterance-data ()
+   (ftglRenderFont Font (format "x:  ~a" (utterance-x u)) 65535)
+   (gl-raster-pos 100 210)
+   (ftglRenderFont Font (format "y:  ~a" (utterance-y u)) 65535)
+   (gl-raster-pos 0 190)
+   (ftglRenderFont Font (format "w:  ~a" (utterance-w u)) 65535)
+   (gl-raster-pos 100 190)
+   (ftglRenderFont Font (format "h:  ~a" (utterance-h u)) 65535)
+   (gl-raster-pos 0 170)
+   (ftglRenderFont Font (format "text-w:  ~a" (utterance-text-w u)) 65535)
+   (gl-raster-pos 100 170)
+   (ftglRenderFont Font (format "text-h:  ~a" (utterance-text-h u)) 65535)
+   (gl-raster-pos 0 150)
+   (ftglRenderFont Font (format "color:  ~a" (utterance-clr u)) 65535)
+   (gl-raster-pos 0 130)
+   (ftglRenderFont Font (format "children:  ~a" (map (lambda (u) ((node-text-func (utterance-node u)) (utterance-node u))) (utterance-args u))) 65535))
+
+  (paint-neighborhood ()
+   (map paint-triple (cadddr (node-data (utterance-node u))) (build-list (length (cadddr (node-data (utterance-node u)))) identity)))
+
+  (paint-triple (t n)
+   (gl-raster-pos 300 (- 310 (* 20 n)))
+   (ftglRenderFont Font (format "~a" t) 65535))
+
+  (set-tree ()
+   (set-whole-tree-childfunc! Bar-tree (whole-tree-childfunc Selected-tree))
+   (set-whole-tree-n-tree! Bar-tree (root->node (node-data (utterance-node u)) (whole-tree-childfunc Bar-tree) '()))
+   (set-whole-tree-open! Bar-tree (set))
+   (set-whole-tree-selection! Bar-tree '())
+   (set-whole-tree-offset-x! Bar-tree 0)
+   (set-whole-tree-offset-y! Bar-tree 0)
+   (set-whole-tree-zoom! Bar-tree 1)
+   (generate-utterance-tree Bar-tree)
+   (open-u (whole-tree-utterance-tree Bar-tree) #t Bar-tree))))
+
 (define (set-info text)
  (set! Info text))
 
@@ -372,11 +460,11 @@
  (gl-clear 'color-buffer-bit)
  (gl-color (/ (car (car INFOCOLOR)) 255) (/ (cadr (car INFOCOLOR)) 255) (/ (caddr (car INFOCOLOR)) 255))
  (gl-raster-pos 0 10)
- (ftglRenderFont Font (substring text 0 (min (string-length text) 120)) 65535)
+ (ftglRenderFont Font (substring text 0 (min (string-length text) 200)) 65535)
  (if swap
   (send Thecanvas swap-gl-buffers)
   '())
-  (gl-disable 'scissor-test))
+ (gl-disable 'scissor-test))
 
 
 (define (whole-tree-dim tree)
@@ -428,6 +516,7 @@
    '())))
 
 (define Info-dim (list 0 (- HEIGHT 30) WIDTH 30))
+(define Bar-dim (list 0 (- HEIGHT 330) WIDTH 300))
 
 (define Font (ftglCreateBitmapFont "/home/philip/olddesktop/vilisp/VeraMono.ttf"))
 (ftglSetFontFaceSize Font 12 72)
@@ -500,15 +589,15 @@
  (normalize-trees))
 
 (define (normalize-trees)
- (let* ((num (length (cddr Trees)))
-        (h (round (/ (- HEIGHT 30) num))))
+ (let* ((num (length (cdddr Trees)))
+        (h (round (/ (- HEIGHT 330) num))))
   (for-each
    (lambda (tree n)
     (set-whole-tree-x! tree (/ WIDTH 2))
-    (set-whole-tree-y! tree (+ 30 (* (- (+ -1 num) n) h)))
+    (set-whole-tree-y! tree (+ 330 (* (- (+ -1 num) n) h)))
     (set-whole-tree-w! tree (/ WIDTH 2))
     (set-whole-tree-h! tree h))
-   (cddr Trees)
+   (cdddr Trees)
    (build-list num identity))))
 
 (define (display-on-screen x y w h root childfunc)
@@ -520,7 +609,7 @@
     childfunc
     dummy-utterance
     (set)
-    dummy-utterance
+    '()
     x
     y
     w

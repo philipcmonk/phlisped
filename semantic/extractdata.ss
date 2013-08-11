@@ -374,7 +374,7 @@
 ;(test->graph->file "testdata2")
 
 (define (yup)
- (display-on-screen 0 30 WIDTH (- HEIGHT 30) (list 0 'list '())
+ (display-on-screen 0 330 WIDTH (- HEIGHT 330) (list 0 'list '() '())
   child-fun))
  
 (define (is-call-t id)
@@ -406,23 +406,22 @@
 
   (get-rep (id child-fun)
    (with
-    ((cons id (get-written id child-fun)))
+    ((cons id (get-written)))
 
-    (get-written (id child-fun)
+    (get-written ()
      (let ((nbhd (is-written-t id)))
       (if nbhd
-       (list 'terminal (triple-end nbhd))
-;       (let ((nbhd2 (is-call-t id)))
-;        (if nbhd2
-;         (list 'call '--)
-         (let ((nbhd3 (is-func-t id)))
-          (if nbhd3
-           (let ((nbhd4 (is-named-t id)))
-            (if nbhd4
-             (list 'scoped (triple-end nbhd4))
-             (list 'scoped '---)))
-           (list 'list '-))))))))))
-;         (let ((nbhd3 (graph-neighborhood-edge-forward G (triple-end (car nbhd2)) "is named")))
+       (list 'terminal (triple-end nbhd) (nei))
+       (let ((nbhd3 (is-func-t id)))
+        (if nbhd3
+         (let ((nbhd4 (is-named-t id)))
+          (if nbhd4
+           (list 'scoped (triple-end nbhd4) (nei))
+           (list 'scoped '--- (nei))))
+         (list 'list '- (nei)))))))
+
+    (nei ()
+     (map triple->list (graph-neighborhood-forward G id)))))))
 
 (yup)
 

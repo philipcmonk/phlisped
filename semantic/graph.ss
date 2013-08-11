@@ -4,6 +4,8 @@
 
 (require racket/set)
 
+(provide (all-defined-out))
+
 (struct graph (vertices edges) #:prefab)
 (struct triple (start edge end) #:prefab)
 
@@ -26,7 +28,8 @@
 (define (display-triple t)
  (display (triple-start t)) (display " --> ") (display (triple-edge t)) (display " --> ") (display (triple-end t)) (newline))
 
-(provide (all-defined-out))
+(define (triple->list t)
+ (list (triple-start t) (triple-edge t) (triple-end t)))
 
 (define (create-triples v1 e v2)
  (flatten 
