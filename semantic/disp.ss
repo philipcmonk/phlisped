@@ -206,8 +206,6 @@
                                node-laddr
                                (if deep?
                                 (flatten (cons (utterance-node u) (map (lambda (a) (node-deep-args a (compose (curry eq? 'scoped) cadr node-data))) (node-args (utterance-node u)))))
-;                                                         (lambda (n) #f
-                                ;(null? (ess-man-args (node-man n)))
                                 (letrec
                                  ((lam (lambda (l)
                                         (if (or (null? l) (ormap (lambda (x) (closed? x tree)) l))
@@ -234,7 +232,7 @@
                                          (if (andmap
                                               (lambda (x) (or (closed? x tree) (null? (node-args x))))
                                               (flatten (map node-args l)))
-                                          l
+                                          (append l (flatten (map node-args l)))
                                           (lam (flatten (map node-args l)))))))
                                   (lam (list (utterance-node u))))))))))
  (generate-utterance-tree tree))
@@ -414,9 +412,9 @@
    (gl-raster-pos 0 210)
    (paint-utterance-data)
    (gl-raster-pos 0 110)
+   (paint-open-set)
    (paint-neighborhood)
-;   (set-tree))
-   )
+   (set-tree))
 
   (paint-name ()
    (ftglRenderFont Font ((node-text-func (utterance-node u)) (utterance-node u)) 65535))
@@ -449,6 +447,9 @@
    (ftglRenderFont Font (format "color:  ~a" (utterance-clr u)) 65535)
    (gl-raster-pos 0 130)
    (ftglRenderFont Font (format "children:  ~a" (map (lambda (u) ((node-text-func (utterance-node u)) (utterance-node u))) (utterance-args u))) 65535))
+
+  (paint-open-set ()
+   (ftglRenderFont Font (format "open set:  ~a" (whole-tree-open Selected-tree)) 65535))
 
   (paint-neighborhood ()
    (map paint-triple (cadddr (node-data (utterance-node u))) (build-list (length (cadddr (node-data (utterance-node u)))) identity)))
