@@ -205,7 +205,7 @@
                               (map
                                node-laddr
                                (if deep?
-                                (flatten (cons (utterance-node u) (map (lambda (a) (node-deep-args a (compose (curry eq? 'scoped) cadr node-data))) (node-args (utterance-node u)))))
+                                (flatten (cons (utterance-node u) (map (lambda (a) (node-deep-args a (compose (curryr member '(scoped var)) cadr node-data))) (node-args (utterance-node u)))))
                                 (letrec
                                  ((lam (lambda (l)
                                         (if (or (null? l) (ormap (lambda (x) (closed? x tree)) l))
@@ -503,18 +503,34 @@
    (list (utterance-x u) (+ (utterance-y u) -1) tree))))
    
 (define (find-utterance root x y tree)
- (if (or
-      (< (min-dim x y) (+ (utterance-min-dim root) (utterance-min-dim-span root)))
-      (closed? (utterance-node root) tree)
-      (null? (node-args (utterance-node root)))
-      (> (maj-dim x y) (let ((baby (last (utterance-args root)))) (+ (utterance-maj-dim baby) (utterance-maj-dim-span baby)))))
-  root
-  (ormap
-   (lambda (child)
-    (if (< (maj-dim x y) (+ (utterance-maj-dim child) (utterance-maj-dim-span child)))
-     (find-utterance child x y tree)
-     #f))
-   (utterance-args root))))
+ (with
+  ((if (or
+        (above-bottom-of-utterance?)
+        (utterance-is-closed?)
+        (has-no-children?)
+        (is-to-the-right-of-utterance?))
+    root
+    (pass-on-to-child)))
+
+  (above-bottom-of-utterance? ()
+   (< (min-dim x y) (+ (utterance-min-dim root) (utterance-min-dim-span root))))
+
+  (utterance-is-closed? ()
+   (closed? (utterance-node root) tree))
+        
+  (has-no-children? ()
+   (null? (node-args (utterance-node root))))
+
+  (is-to-the-right-of-utterance? ()
+   (> (maj-dim x y) (let ((baby (last (utterance-args root)))) (+ (utterance-maj-dim baby) (utterance-maj-dim-span baby)))))
+
+  (pass-on-to-child ()
+   (ormap
+    (lambda (child)
+     (if (<= (maj-dim x y) (+ (utterance-maj-dim child) (utterance-maj-dim-span child)))
+      (find-utterance child x y tree)
+      #f))
+    (utterance-args root)))))
 
 (define (select u tree)
  (set! Selected-tree tree)

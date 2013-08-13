@@ -75,6 +75,8 @@
       (cons id code)))))
   ))
 
+(set! Next-id (triple-end (car (graph-neighborhood-edge-forward G 'next-id "is"))))
+
 (define (add-sibling event)
  (let* ((id (selected-id Selected-tree))
         (parent-id (selected-parent-id Selected-tree))
@@ -330,6 +332,7 @@
      (swap-child ()
       (set! G (graph (graph-vertices G) (replace (triple LINK1PARENT "has child" LINK1) (list (triple LINK1PARENT "has child" link2)) (graph-edges G))))
       (let ((has-env (car (graph-neighborhood-edge-forward G link2 "has env"))))
+       (display has-env) (newline)
        (set! G (graph (graph-vertices G) (replace has-env (list (triple link2 "has env" (common-ancestor link2 (triple-end has-env)))) (graph-edges G))))))
 
      (interlocute-and-swap ()
@@ -341,7 +344,7 @@
 
 (define (common-ancestor id1 id2)
  (with
-  ((find-first-overlap (ancestors id1 '()) (ancestors id2 '())))
+  ((find-first-overlap (ancestors id1 (list id1)) (ancestors id2 (list id2))))
 
   (ancestors (id l)
    (let ((has-child (graph-neighborhood-edge-backward G id "has child")))
@@ -471,12 +474,14 @@
  (if (null? laddr)
   '()
   (begin
-;   (display (car laddr)) (display "\t") (display pos) (display "\t") (display id) (display "\t") (display (car (node-data (utterance-node (list-ref (utterance-args u) pos))))) (newline)
   (if (and (= (car laddr) pos) (eq? id (car (node-data (utterance-node (list-ref (utterance-args u) pos))))))
    (begin (display whole-laddr) (newline) whole-laddr)
    (remove-laddr-del id pos (list-ref (utterance-args u) (car laddr)) (cdr laddr) whole-laddr)))))
 
 (define (reify-code event) (display (reify G 0)) (newline))
+
+(define (write-to-file event)
+ (graph->file G))
 
 (add-key-evs (list #\space add-sibling
                    #\( add-child
@@ -488,6 +493,7 @@
                    #\s set-scope
                    #\L interlocute-lambda
                    #\a argify
+                   'f2 write-to-file
                    'insert handle-insert
                    'link handle-link
                    'var handle-var
@@ -495,7 +501,8 @@
                    'argify handle-argify))
 
 (define (graph->file g)
- (call-with-output-file GRFILE #:exists 'truncate (lambda (f) (write g f))))
+ (let ((g (graph (graph-vertices g) (replace (car (graph-neighborhood-edge-forward g 'next-id "is")) (list (triple 'next-id "is" Next-id)) (graph-edges g)))))
+  (call-with-output-file GRFILE #:exists 'truncate (lambda (f) (write g f)))))
 
 (display (graph->string G))
 (if NEWCODE
@@ -599,38 +606,28 @@
     ((cons id (get-written)))
 
     (get-written ()
-     (let ((nbhd3 (is-func-t id))
-           (nbhd4 (is-named-t id)))
-      (if nbhd3
-       (if nbhd4
-        (list 'scoped (triple-end nbhd4) (nei))
+     (let ((is-func (is-func-t id))
+           (is-named (is-named-t id)))
+      (if is-func
+       (if is-named
+        (list 'scoped (triple-end is-named) (nei))
         (list 'scoped '--- (nei)))
        (let ((has-child (graph-neighborhood-edge-forward G id "has child"))
-             (is-written (is-written-t id)))
+             (is-written (is-written-t id))
+             (is-defined-as (graph-neighborhood-edge-forward G id "is defined as")))
         (if (not (null? has-child))
-         (if nbhd4
-          (list 'list (triple-end nbhd4) (nei))
+         (if is-named
+          (list 'list (triple-end is-named) (nei))
           (if is-written
            (list 'list (triple-end is-written) (nei))
            (list 'list '- (nei))))
          (if is-written
           (list 'terminal (triple-end is-written) (nei))
-          (list 'unknown 'unknown (nei))))))))
-
-
-
-;     (let ((nbhd (is-written-t id)))
-;      (if nbhd
-;       (list 'terminal (triple-end nbhd) (nei))
-;       (let ((nbhd3 (is-func-t id))
-;             (nbhd4 (is-named-t id)))
-;        (if nbhd3
-;         (if nbhd4
-;          (list 'scoped (triple-end nbhd4) (nei))
-;          (list 'scoped '--- (nei)))
-;         (if nbhd4
-;          (list 'list (triple-end nbhd4) (nei))
-;          (list 'list '- (nei))))))))
+          (if (not (null? is-defined-as))
+           (if is-named
+            (list 'var (triple-end is-named) (nei))
+            (list 'var '-- (nei)))
+           (list 'unknown 'unknown (nei)))))))))
 
     (nei ()
      (map triple->list (graph-neighborhood-forward G id)))))))
