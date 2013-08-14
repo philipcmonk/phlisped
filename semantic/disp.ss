@@ -21,7 +21,7 @@
 (define-ftgl ftglRenderFont (_fun _FTGLfont _string _int -> _void))
 (define-ftgl ftglDestroyFont (_fun _FTGLfont -> _void))
 
-(provide my-canvas% box-width box-height box-maj-dim node-width node-height node-maj-dim VERTICAL display-on-screen Thecanvas Info Selected-tree utterance-parent utterance-node utterance-args node-data node-laddr whole-tree-selection-u whole-tree-selection set-whole-tree-selection! whole-tree-open set-whole-tree-open! whole-tree-utterance-tree add-key-evs key-evs update-childfuncs set-info enter-insert-mode exit-insert-mode enter-link-mode exit-link-mode enter-var-mode exit-var-mode enter-scope-mode exit-scope-mode enter-argify-mode exit-argify-mode paint-info go find-utterance-from-laddr-safe)
+(provide my-canvas% box-width box-height box-maj-dim node-width node-height node-maj-dim VERTICAL display-on-screen Thecanvas Info Selected-tree utterance-parent utterance-node utterance-args node-data node-laddr whole-tree-selection-u whole-tree-selection set-whole-tree-selection! whole-tree-open set-whole-tree-open! whole-tree-utterance-tree add-key-evs key-evs update-childfuncs set-info enter-insert-mode exit-insert-mode enter-link-mode exit-link-mode enter-var-mode exit-var-mode enter-scope-mode exit-scope-mode enter-argify-mode exit-argify-mode paint-info go find-utterance-from-laddr-safe for-all-trees)
 
 (struct node (data laddr prom-args text-func) #:transparent)
 (struct utterance (node x y w h text-w text-h args clr) #:transparent)
@@ -88,11 +88,28 @@
     #\O (lambda (_) (open-u (whole-tree-selection-u Selected-tree) #t Selected-tree) (send Thecanvas on-paint))
     #\C (lambda (_) (close-u (whole-tree-selection-u Selected-tree) #t Selected-tree) (send Thecanvas on-paint))
     #\z zoom-out
+    #\0 (curry nth-child 0)
+    #\1 (curry nth-child 1)
+    #\2 (curry nth-child 2)
+    #\3 (curry nth-child 3)
+    #\4 (curry nth-child 4)
+    #\5 (curry nth-child 5)
+    #\6 (curry nth-child 6)
+    #\7 (curry nth-child 7)
+    #\8 (curry nth-child 8)
+    #\9 (curry nth-child 9)
     'wheel-up (lambda (_) (set-whole-tree-offset-x! Selected-tree (+ SCROLLDIST (whole-tree-offset-x Selected-tree))) (send Thecanvas on-paint))
     'wheel-down (lambda (_) (set-whole-tree-offset-x! Selected-tree (+ (- SCROLLDIST) (whole-tree-offset-x Selected-tree))) (send Thecanvas on-paint))
     'wheel-left (lambda (_) (set-whole-tree-offset-y! Selected-tree (+ SCROLLDIST (whole-tree-offset-y Selected-tree))) (send Thecanvas on-paint))
     'wheel-right (lambda (_) (set-whole-tree-offset-y! Selected-tree (+ (- SCROLLDIST) (whole-tree-offset-y Selected-tree))) (send Thecanvas on-paint))
     ))
+
+  (nth-child (n event)
+   (if (> (length (utterance-args (whole-tree-selection-u Selected-tree))) n)
+    (select (list-ref (utterance-args (whole-tree-selection-u Selected-tree)) n) Selected-tree)
+    (select (last (utterance-args (whole-tree-selection-u Selected-tree))) Selected-tree))
+   (generate-utterance-tree Selected-tree)
+   (send Thecanvas on-paint))
 
   (new-tree (event)
    (add-to-screen (node-data (utterance-node (whole-tree-selection-u Selected-tree))) (whole-tree-childfunc Selected-tree))
@@ -355,6 +372,9 @@
    (super-instantiate () (style '(gl)))))
   ))
 
+(define (for-all-trees f)
+ (for-each f (cdr Trees)))
+
 (define INSERTMODE #f)
 
 (define (enter-insert-mode) (set! INSERTMODE #t))
@@ -522,12 +542,12 @@
    (null? (node-args (utterance-node root))))
 
   (is-to-the-right-of-utterance? ()
-   (> (maj-dim x y) (let ((baby (last (utterance-args root)))) (+ (utterance-maj-dim baby) (utterance-maj-dim-span baby)))))
+   (>= (maj-dim x y) (let ((baby (last (utterance-args root)))) (+ (utterance-maj-dim baby) (utterance-maj-dim-span baby)))))
 
   (pass-on-to-child ()
    (ormap
     (lambda (child)
-     (if (<= (maj-dim x y) (+ (utterance-maj-dim child) (utterance-maj-dim-span child)))
+     (if (< (maj-dim x y) (+ (utterance-maj-dim child) (utterance-maj-dim-span child)))
       (find-utterance child x y tree)
       #f))
     (utterance-args root)))))
