@@ -77,31 +77,36 @@
 
 (set! Next-id (triple-end (car (graph-neighborhood-edge-forward G 'next-id "is"))))
 
+; XXX shouldn't allow adding args
 (define (add-sibling event)
  (let* ((id (selected-id Selected-tree))
         (parent-id (selected-parent-id Selected-tree))
         (is-call-to (graph-neighborhood-edge-forward G parent-id "is call to")))
   (with
-   ((undo-push)
-    (set! G (graph (graph-vertices G)
-                   (if (null? is-call-to)
-                    (add-child)
-                    (if (adding-first-arg?)
-                     (add-arg-at-beginning)
-                     (add-child)))))
-    (update-open)
-    (set! Next-id (+ 1 Next-id))
-    (update-childfuncs child-fun)
-    (go 'right Selected-tree))
- 
-   (adding-first-arg? ()
-    (member (triple parent-id "is call to" id) (graph-edges G)))
- 
-   (add-arg-at-beginning ()
-    (append (list (triple parent-id "has child" Next-id) (triple Next-id "is written" 'wahaha)) (graph-edges G)))
+   ((if (not (null? is-call-to))
+     '()
+     (begin
+      (undo-push)
+      (set! G (graph (graph-vertices G) (add-child)))
+;                      (if (adding-first-arg?)
+;                       (add-arg-at-beginning)
+;                       (add-arg-in-middle)))))
+      (update-open)
+      (set! Next-id (+ 1 Next-id))
+      (update-childfuncs child-fun)
+      (go 'right Selected-tree))))
  
    (add-child ()
     (replace (triple parent-id "has child" id) (list (triple parent-id "has child" id) (triple parent-id "has child" Next-id) (triple Next-id "is written" 'mwahaha)) (graph-edges G)))
+ 
+;   (adding-first-arg? ()
+;    (member (triple parent-id "is call to" id) (graph-edges G)))
+; 
+;   (add-arg-at-beginning ()
+;    (append (list (triple parent-id "has arg" Next-id) (triple Next-id "is written" 'wahaha)) (graph-edges G)))
+;
+;   (add-arg-in-middle ()
+;    (replace (triple parent-id "has arg" id) (list (triple parent-id "has arg" id) (triple parent-id "has arg" Next-id) (triple Next-id "is written" 'umsoyeah)) (graph-edges G)))
  
    (update-open ()
     (for-all-trees
@@ -125,22 +130,27 @@
    (cons (car laddr) (adjust-laddr id pos (list-ref (utterance-args u) (car laddr)) (cdr laddr))))))
 
 (define (add-child event)
- (let ((id (selected-id Selected-tree)))
+ (let* ((id (selected-id Selected-tree))
+        (is-call-to (graph-neighborhood-edge-forward G id "is call to"))
+        (is-defined-as (graph-neighborhood-edge-forward G id "is defined as")))
   (with
-   ((undo-push)
-    (set! G (graph (graph-vertices G) (add-child-at-beginning)))
-    (set! Next-id (+ 1 Next-id))
-    (update-open)
-    (update-childfuncs child-fun)
-    (go 'down Selected-tree))
- 
-   (add-child-at-beginning ()
-    (append (list (triple id "has child" Next-id) (triple Next-id "is written" 'kwahaha)) (graph-edges G)))
- 
-   (update-open ()
-    (for-all-trees
-     (lambda (tree)
-      (set-whole-tree-open! tree (set-union (whole-tree-open tree) (set (whole-tree-selection Selected-tree) (append (whole-tree-selection Selected-tree) (list 0)))))))))))
+   ((if (not (and (null? is-call-to) (null? is-defined-as)))
+     '()
+     (begin
+      (undo-push)
+      (set! G (graph (graph-vertices G) (add-child-at-beginning)))
+      (set! Next-id (+ 1 Next-id))
+      (update-open)
+      (update-childfuncs child-fun)
+      (go 'down Selected-tree))))
+   
+     (add-child-at-beginning ()
+      (append (list (triple id "has child" Next-id) (triple Next-id "is written" 'kwahaha)) (graph-edges G)))
+   
+     (update-open ()
+      (for-all-trees
+       (lambda (tree)
+        (set-whole-tree-open! tree (set-union (whole-tree-open tree) (set (whole-tree-selection Selected-tree) (append (whole-tree-selection Selected-tree) (list 0)))))))))))
 
 (define INSERTTEXT "")
 
@@ -252,6 +262,10 @@
 
   (make-arg ()
    (let* ((link2 (selected-id Selected-tree))
+          (parent-link2 (selected-parent-id Selected-tree))
+          (has-child (member (triple parent-link2 "has child" link2) (graph-edges G)))
+          (has-arg (member (triple parent-link2 "has arg" link2) (graph-edges G)))
+          (parent-link2-t (if has-child (car has-child) (if has-arg (car has-arg) '())))
           (hijito (triple-end (car (graph-neighborhood-edge-forward G LINK1 "is call to"))))
           (is-defined-as (graph-neighborhood-edge-forward G link2 "is defined as")))
     (with
@@ -262,25 +276,27 @@
       (update-childfuncs child-fun)
       (exit-argify-mode))
 
+     ; XXX enforce number of args across all calls
      (add-arg-to-call ()
       (if (null? is-defined-as)
-       (set! G (graph (graph-vertices G) (append (graph-edges G) (list (triple LINK1 "has child" link2) (triple hijito "has formal arg" Next-id) (triple Next-id "is written" 'arger) (triple Next-id "is reified as" (string->symbol (format "a~s" Next-id)))))))
-       (set! G (graph (graph-vertices G) (append (graph-edges G) (list (triple LINK1 "has child" (triple-end (car is-defined-as))) (triple hijito "has formal arg" Next-id) (triple Next-id "is written" 'arger) (triple Next-id "is reified as" (string->symbol (format "a~s" Next-id)))))))))
+       (set! G (graph (graph-vertices G) (append (graph-edges G) (list (triple LINK1 "has arg" link2) (triple hijito "has formal arg" Next-id) (triple Next-id "is written" 'arger) (triple Next-id "is reified as" (string->symbol (format "a~s" Next-id)))))))
+       (set! G (graph (graph-vertices G) (append (graph-edges G) (list (triple LINK1 "has arg" (triple-end (car is-defined-as))) (triple hijito "has formal arg" Next-id) (triple Next-id "is written" 'arger) (triple Next-id "is reified as" (string->symbol (format "a~s" Next-id)))))))))
 
      (convert-var-to-arg ()
       (set! G (graph (graph-vertices G) ((if (null? is-defined-as) swap-normal swap-var) hijito (graph-edges G)))))
 
      (swap-normal (in-id res)
-      (foldl
-       swap-normal
-       (foldl
-        (lambda (t res)
-         (if (eq? (triple-end t) link2)
-          (replace t (list (triple in-id "has child" Next-id)) res)
-          res))
-        res
-        (graph-neighborhood-edge-forward G in-id "has child"))
-       (map triple-end (graph-neighborhood-edge-forward G in-id "has child"))))
+      (replace parent-link2-t (list (triple parent-link2 (triple-edge parent-link2-t) Next-id)) (graph-edges G)))
+;      (foldl
+;       swap-normal
+;       (foldl
+;        (lambda (t res)
+;         (if (eq? (triple-end t) link2)
+;          (replace t (list (triple in-id "has child" Next-id)) res)
+;          res))
+;        res
+;        (graph-neighborhood-edge-forward G in-id "has child"))
+;       (map triple-end (graph-neighborhood-edge-forward G in-id "has child"))))
 
      (swap-var (in-id res)
       (replace (car is-defined-as) (list (triple link2 "is defined as" Next-id)) (graph-edges G))))))))
@@ -339,7 +355,13 @@
 
   (make-var ()
    (let* ((link2 (selected-id Selected-tree))
-          (parent-link2 (selected-parent-id Selected-tree)))
+          (parent-link2 (selected-parent-id Selected-tree))
+          (has-child1 (member (triple LINK1PARENT "has child" LINK1) (graph-edges G)))
+          (has-arg1 (member (triple LINK1PARENT "has arg" LINK1) (graph-edges G)))
+          (parent-link1-t (if has-child1 (car has-child1) (if has-arg1 (car has-arg1) '())))
+          (has-child2 (member (triple parent-link2 "has child" link2) (graph-edges G)))
+          (has-arg2 (member (triple parent-link2 "has arg" link2) (graph-edges G)))
+          (parent-link2-t (if has-child2 (car has-child2) (if has-arg2 (car has-arg2) '()))))
     (with
      ((undo-push)
       (if (has-definition?)
@@ -352,7 +374,7 @@
       (not (null? (graph-neighborhood-edge-forward G link2 "is defined as"))))
 
      (swap-child ()
-      (set! G (graph (graph-vertices G) (replace (triple LINK1PARENT "has child" LINK1) (list (triple LINK1PARENT "has child" link2)) (graph-edges G))))
+      (set! G (graph (graph-vertices G) (replace parent-link2-t (list (triple LINK1PARENT (triple-edge parent-link1-t) link2)) (graph-edges G))))
       (let ((has-env (car (graph-neighborhood-edge-forward G link2 "has env"))))
        (display has-env) (newline)
        (set! G (graph (graph-vertices G) (replace has-env (list (triple link2 "has env" (common-ancestor link2 (triple-end has-env)))) (graph-edges G))))))
@@ -363,17 +385,20 @@
         (set-whole-tree-selection! tree (adjust-laddr-interlocutor link2 (last (whole-tree-selection tree)) (whole-tree-utterance-tree tree)))
         (set-whole-tree-open! tree (adjust-laddr-interlocute link2 (last (whole-tree-selection Selected-tree)) tree))))
       (set-whole-tree-selection! Selected-tree LINK1ADDR)
-      (set! G (graph (graph-vertices G) (replace (triple parent-link2 "has child" link2) (list (triple parent-link2 "has child" Next-id) (triple Next-id "is defined as" link2) (triple Next-id "has env" (common-ancestor LINK1 link2))) (graph-edges G))))
-      (set! G (graph (graph-vertices G) (replace (triple LINK1PARENT "has child" LINK1) (list (triple LINK1PARENT "has child" Next-id)) (graph-edges G))))
+      (set! G (graph (graph-vertices G) (replace parent-link2-t (list (triple parent-link2 (triple-edge parent-link2-t) Next-id) (triple Next-id "is defined as" link2) (triple Next-id "has env" (common-ancestor LINK1 link2))) (graph-edges G))))
+      (set! G (graph (graph-vertices G) (replace parent-link1-t (list (triple LINK1PARENT (triple-edge parent-link1-t) Next-id)) (graph-edges G))))
       (set! Next-id (+ 1 Next-id))))))))
 
 (define (common-ancestor id1 id2)
  (with
   ((find-first-overlap (ancestors id1 (list id1)) (ancestors id2 (list id2))))
 
+  ; XXX should also cross "has env", right?
   (ancestors (id l)
-   (let ((has-child (graph-neighborhood-edge-backward G id "has child")))
-    (if (null? has-child)
+   (let* ((has-child (graph-neighborhood-edge-backward G id "has child"))
+          (has-arg (graph-neighborhood-edge-backward G id "has arg"))
+          (has-parent (if (null? has-child) has-arg has-child)))
+    (if (null? has-parent)
      l
      (ancestors (triple-start (car has-child)) (append l (list (triple-start (car has-child))))))))
 
@@ -414,25 +439,28 @@
       (set! G (graph (graph-vertices G) (append (remove (is-written-t LINK1) (graph-edges G)) (list (triple LINK1 "is call to" link2))))))
 
      (add-call-to-plus-scope ()
-      (set! G (graph (graph-vertices G) (append (remove (is-written-t LINK1) (graph-edges G)) (list (triple LINK1 "is call to" link2) (triple link2 "has scope" (selected-parent-id Selected-tree)))))))
+      (set! G (graph (graph-vertices G) (append (remove (is-written-t LINK1) (graph-edges G)) (list (triple LINK1 "is call to" link2) (triple link2 "has scope" (selected-parent-id Selected-tree))))))))))))
 
-     (add-call-to-and-change-original (has-child)
-      (for-all-trees
-       (lambda (tree)
-        (set-whole-tree-selection! tree (adjust-laddr-interlocutor link2 (last (whole-tree-selection tree)) (whole-tree-utterance-tree tree)))
-        (set-whole-tree-open! tree (adjust-laddr-interlocute link2 (last (whole-tree-selection Selected-tree)) tree))))
-      (set-whole-tree-selection! Selected-tree LINK1ADDR)
-      (set! G (graph (graph-vertices G) (append (replace (car has-child) (list (triple (triple-start (car has-child)) "has child" Next-id) (triple Next-id "is call to" link2)) (remove (is-written-t LINK1) (graph-edges G))) (cdr has-child) (list (triple LINK1 "is call to" link2) (triple link2 "has scope" (selected-parent-id Selected-tree))))))
-      (set! Next-id (+ 1 Next-id))))))))
+;     (add-call-to-and-change-original (has-child)
+;      (for-all-trees
+;       (lambda (tree)
+;        (set-whole-tree-selection! tree (adjust-laddr-interlocutor link2 (last (whole-tree-selection tree)) (whole-tree-utterance-tree tree)))
+;        (set-whole-tree-open! tree (adjust-laddr-interlocute link2 (last (whole-tree-selection Selected-tree)) tree))))
+;      (set-whole-tree-selection! Selected-tree LINK1ADDR)
+;      (set! G (graph (graph-vertices G) (append (replace (car has-child) (list (triple (triple-start (car has-child)) "has child" Next-id) (triple Next-id "is call to" link2)) (remove (is-written-t LINK1) (graph-edges G))) (cdr has-child) (list (triple LINK1 "is call to" link2) (triple link2 "has scope" (selected-parent-id Selected-tree))))))
+;      (set! Next-id (+ 1 Next-id))))))))
 
 (define (interlocute-lambda event)
- (let ((id (selected-id Selected-tree))
-       (parent-id (selected-parent-id Selected-tree)))
+ (let* ((id (selected-id Selected-tree))
+        (parent-id (selected-parent-id Selected-tree))
+        (has-child (member (triple parent-id "has child" id) (graph-edges G)))
+        (has-arg (member (triple parent-id "has arg" id) (graph-edges G)))
+        (parent-link-t (if has-child (car has-child) (if has-arg (car has-arg) '()))))
   (undo-push)
   (for-all-trees
    (lambda (tree)
     (set-whole-tree-open! tree (adjust-laddr-interlocute id (last (whole-tree-selection Selected-tree)) tree))))
-  (set! G (graph (graph-vertices G) (replace (triple parent-id "has child" id) (list (triple parent-id "has child" Next-id) (triple Next-id "is call to" id) (triple id "has scope" parent-id)) (graph-edges G))))
+  (set! G (graph (graph-vertices G) (replace parent-link-t (list (triple parent-id (triple-edge parent-link-t) Next-id) (triple Next-id "is call to" id) (triple id "has scope" parent-id)) (graph-edges G))))
   (set! Next-id (+ 1 Next-id))
   (update-childfuncs child-fun)))
 
@@ -461,11 +489,14 @@
         (child (member (triple parent-id "has child" id) (graph-edges G)))
         (call (member (triple parent-id "is call to" id) (graph-edges G))))
   (with
-   ((undo-push)
-    (update-open)
-    (update-selection)
-    (remove-child)
-    (update-childfuncs child-fun))
+   ((if (not child)
+     '()
+     (begin
+      (undo-push)
+      (update-open)
+      (update-selection)
+      (remove-child)
+      (update-childfuncs child-fun))))
 
    (update-selection ()
     (let ((laddr (whole-tree-selection Selected-tree)))
@@ -590,6 +621,7 @@
 (define (reify g id)
  (let ((has-child (graph-neighborhood-edge-forward g id "has child"))
        (is-call-to (graph-neighborhood-edge-forward g id "is call to"))
+       (has-arg (graph-neighborhood-edge-forward g id "has arg"))
        (is-written (is-written-t id))
        (has-scope (graph-neighborhood-edge-backward g id "has scope"))
        (is-defined-as (graph-neighborhood-edge-forward g id "is defined as"))
@@ -616,7 +648,7 @@
      ") "))
    (if (not (null? is-call-to))
     (string-join
-     (map (curry reify g) (map triple-end has-child))
+     (map (curry reify g) (map triple-end has-arg))
      " "
      #:before-first (format "(f~s " (triple-end (car is-call-to)))
      #:after-last ")")
@@ -670,8 +702,8 @@
     (append
      (graph-neighborhood-edge-forward G (car a) "is call to")
      (graph-neighborhood-edge-forward G (car a) "has child")
+     (graph-neighborhood-edge-forward G (car a) "has arg")
      (graph-neighborhood-edge-forward G (car a) "is defined as"))))
-;     (graph-neighborhood-edge-forward G (car a) "has arg"))))
 ;  (((compose
 ;     (curry map (compose (curryr get-rep child-fun) triple-end))
 ;     (compose
