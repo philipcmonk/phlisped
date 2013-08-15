@@ -267,26 +267,30 @@
           (has-arg (member (triple parent-link2 "has arg" link2) (graph-edges G)))
           (parent-link2-t (if has-child (car has-child) (if has-arg (car has-arg) '())))
           (hijito (triple-end (car (graph-neighborhood-edge-forward G LINK1 "is call to"))))
-          (is-defined-as (graph-neighborhood-edge-forward G link2 "is defined as")))
+          (is-defined-as (graph-neighborhood-edge-forward G link2 "is defined as"))
+          (arg-id Next-id))
     (with
      ((undo-push)
+      (set! Next-id (+ 1 Next-id))
+      (add-arg-to-hijito)
       (add-arg-to-call)
       (convert-var-to-arg)
-      (set! Next-id (+ 1 Next-id))
       (update-childfuncs child-fun)
       (exit-argify-mode))
 
-     ; XXX enforce number of args across all calls
+     (add-arg-to-hijito ()
+      (set! G (graph (graph-vertices G) (append (graph-edges G) (list (triple hijito "has formal arg" arg-id) (triple arg-id "is written" 'arger) (triple arg-id "is reified as" (string->symbol (format "a~s" arg-id))))))))
+
      (add-arg-to-call ()
-      (if (null? is-defined-as)
-       (set! G (graph (graph-vertices G) (append (graph-edges G) (list (triple LINK1 "has arg" link2) (triple hijito "has formal arg" Next-id) (triple Next-id "is written" 'arger) (triple Next-id "is reified as" (string->symbol (format "a~s" Next-id)))))))
-       (set! G (graph (graph-vertices G) (append (graph-edges G) (list (triple LINK1 "has arg" (triple-end (car is-defined-as))) (triple hijito "has formal arg" Next-id) (triple Next-id "is written" 'arger) (triple Next-id "is reified as" (string->symbol (format "a~s" Next-id)))))))))
+      (let ((replacement (if (null? is-defined-as) link2 (triple-end (car is-defined-as)))))
+       (set! G (graph (graph-vertices G) (append (graph-edges G) (list (triple LINK1 "has arg" replacement))))))
+      (set! G (graph (graph-vertices G) (append (graph-edges G) (flatten (map (lambda (t) (set! Next-id (+ 1 Next-id)) (list (triple (triple-start t) "has arg" (- Next-id 1)) (triple (- Next-id 1) "is written" 'yo)))  (remove (triple LINK1 "is call to" hijito) (graph-neighborhood-edge-backward G hijito "is call to"))))))))
 
      (convert-var-to-arg ()
       (set! G (graph (graph-vertices G) ((if (null? is-defined-as) swap-normal swap-var) hijito (graph-edges G)))))
 
      (swap-normal (in-id res)
-      (replace parent-link2-t (list (triple parent-link2 (triple-edge parent-link2-t) Next-id)) (graph-edges G)))
+      (replace parent-link2-t (list (triple parent-link2 (triple-edge parent-link2-t) arg-id)) (graph-edges G)))
 ;      (foldl
 ;       swap-normal
 ;       (foldl
@@ -299,7 +303,7 @@
 ;       (map triple-end (graph-neighborhood-edge-forward G in-id "has child"))))
 
      (swap-var (in-id res)
-      (replace (car is-defined-as) (list (triple link2 "is defined as" Next-id)) (graph-edges G))))))))
+      (replace (car is-defined-as) (list (triple link2 "is defined as" arg-id)) (graph-edges G))))))))
 
 (define (set-scope event)
  (set! LINK1 (selected-id Selected-tree))
@@ -436,7 +440,7 @@
       (exit-link-mode))
 
      (add-call-to ()
-      (set! G (graph (graph-vertices G) (append (remove (is-written-t LINK1) (graph-edges G)) (list (triple LINK1 "is call to" link2))))))
+      (set! G (graph (graph-vertices G) (append (remove (is-written-t LINK1) (graph-edges G)) (list (triple LINK1 "is call to" link2)) (flatten (map (lambda (t) (set! Next-id (+ 1 Next-id)) (list (triple LINK1 "has arg" (- Next-id 1)) (triple (- Next-id 1) "is written" 'bill))) (graph-neighborhood-edge-forward G link2 "has formal arg")))))))
 
      (add-call-to-plus-scope ()
       (set! G (graph (graph-vertices G) (append (remove (is-written-t LINK1) (graph-edges G)) (list (triple LINK1 "is call to" link2) (triple link2 "has scope" (selected-parent-id Selected-tree))))))))))))
