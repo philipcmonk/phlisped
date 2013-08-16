@@ -93,6 +93,7 @@
 ;                       (add-arg-in-middle)))))
       (update-open)
       (set! Next-id (+ 1 Next-id))
+      (update-free-variables)
       (update-childfuncs child-fun)
       (go 'right Selected-tree))))
  
@@ -141,6 +142,7 @@
       (set! G (graph (graph-vertices G) (add-child-at-beginning)))
       (set! Next-id (+ 1 Next-id))
       (update-open)
+      (update-free-variables)
       (update-childfuncs child-fun)
       (go 'down Selected-tree))))
    
@@ -198,6 +200,7 @@
                      (if (null? is-named)
                       (add-name)
                       (set-name)))))
+    (update-free-variables)
     (update-childfuncs child-fun))
 
    (get-insert-text ()
@@ -275,6 +278,7 @@
       (add-arg-to-hijito)
       (add-arg-to-call)
       (convert-var-to-arg)
+      (update-free-variables)
       (update-childfuncs child-fun)
       (exit-argify-mode))
 
@@ -327,6 +331,7 @@
     (with
      ((undo-push)
       (swap-scope)
+      (update-free-variables)
       (update-childfuncs child-fun)
       (exit-scope-mode))
 
@@ -371,6 +376,7 @@
       (if (has-definition?)
        (swap-child)
        (interlocute-and-swap))
+      (update-free-variables)
       (update-childfuncs child-fun)
       (exit-var-mode))
 
@@ -436,6 +442,7 @@
 ;        (if (null? has-child)
          (add-call-to-plus-scope))
 ;         (add-call-to-and-change-original has-child))))
+      (update-free-variables)
       (update-childfuncs child-fun)
       (exit-link-mode))
 
@@ -466,6 +473,7 @@
     (set-whole-tree-open! tree (adjust-laddr-interlocute id (last (whole-tree-selection Selected-tree)) tree))))
   (set! G (graph (graph-vertices G) (replace parent-link-t (list (triple parent-id (triple-edge parent-link-t) Next-id) (triple Next-id "is call to" id) (triple id "has scope" parent-id)) (graph-edges G))))
   (set! Next-id (+ 1 Next-id))
+  (update-free-variables)
   (update-childfuncs child-fun)))
 
 (define (adjust-laddr-interlocute id pos tree)
@@ -500,6 +508,7 @@
       (update-open)
       (update-selection)
       (remove-child)
+      (update-free-variables)
       (update-childfuncs child-fun))))
 
    (update-selection ()
@@ -581,6 +590,7 @@
    (set-whole-tree-open! Selected-tree (cadar UNDOSTACK))
    (set-whole-tree-selection! Selected-tree (caddar UNDOSTACK))
    (set! UNDOSTACK (cdr UNDOSTACK))
+   (update-free-variables)
    (update-childfuncs child-fun))))
 
 (define (redo-pop event)
@@ -592,6 +602,7 @@
    (set-whole-tree-open! Selected-tree (cadar REDOSTACK))
    (set-whole-tree-selection! Selected-tree (caddar REDOSTACK))
    (set! REDOSTACK (cdr REDOSTACK))
+   (update-free-variables)
    (update-childfuncs child-fun))))
 
 (define Search-text "")
@@ -732,7 +743,7 @@
 ;(test->graph->file "testdata2")
 
 (define (yup)
- (display-on-screen 0 330 WIDTH (- HEIGHT 330) (list 0 'list '() '() '()) child-fun)
+ (display-on-screen 0 330 WIDTH (- HEIGHT 330) (list 0 'list '() '() '() '() '()) child-fun)
  (display "um, so yeah\n"))
  
 (define (is-call-t id)
@@ -762,39 +773,91 @@
 ;      car))
 ;     a))
 
+(define (graph-ids g) (map triple-start (graph-edges g)))
+(define (lexical-parent id)
+ (let ((is-defined-as (graph-neighborhood-edge-backward G id "is defined as"))
+       (has-child (graph-neighborhood-edge-backward G id "has child"))
+       (has-arg (graph-neighborhood-edge-backward G id "has arg"))
+       (has-scope (graph-neighborhood-edge-forward G id "has scope"))
+       (has-env (graph-neighborhood-edge-forward G id "has env")))
+  (cond
+   ((not (null? is-defined-as))
+    (triple-end (car (graph-neighborhood-edge-forward G (triple-start (car is-defined-as)) "has env"))))
+   ((not (null? has-env))
+    (triple-end (car has-env)))
+   ((not (null? has-child))
+    (triple-start (car has-child)))
+   ((not (null? has-arg))
+    (triple-start (car has-arg)))
+   ((not (null? has-scope))
+    (triple-end (car has-scope)))
+   (#t '()))))
+
 (define free-variables (hash))
+(define bound-variables (hash))
 
 (define (update-free-variables)
  (with
   ((for-each
     update-free-variable-id
-    (remove-duplicates (map triple-start (graph-edges G)))))
+    (remove-duplicates (graph-ids G))))
 
   (update-free-variable-id (id)
-   (if (hash-has-key? free-variables id)
-    '()
-    (let ((free-from-children (remove-duplicates
-                               (flatten
-                                (append
-                                 (map
-                                  (lambda (child) (update-free-variable-id child) (hash-ref free-variables child))
-                                  (append
-                                   (map triple-end (append (graph-neighborhood-edge-forward G id "has child") (graph-neighborhood-edge-forward G id "has arg")))
-                                   (map triple-start (append (graph-neighborhood-edge-backward G id "has scope") (graph-neighborhood-edge-backward G id "has env")))))
-                                 (map triple-end (append (graph-neighborhood-edge-forward G id "is call to")))
-                                 (map triple-start (append (graph-neighborhood-edge-forward G id "is defined as")))
-                                 (if (null? (graph-neighborhood-edge-forward G id "is reified as")) '() (list id))))))
-          (defined-here (append
-                         (map triple-start (append (graph-neighborhood-edge-backward G id "has scope") (graph-neighborhood-edge-backward G id "has env")))
-                         (map triple-end (graph-neighborhood-edge-forward G id "has formal arg")))))
-     (display id) (display "\n\t") (display free-from-children) (display "\n\t\t") (display defined-here) (display "\n\t\t\t") (display (set->list (set-subtract (list->set free-from-children) (list->set defined-here)))) (newline)
-     (set! free-variables (hash-set free-variables id (set->list (set-subtract (list->set free-from-children) (list->set defined-here))))))))))
+   (with
+    ((if (hash-has-key? free-variables id)
+      '()
+       (set! free-variables (hash-set free-variables id (set->list (set-subtract (list->set (free-from-children)) (list->set (defined-here))))))))
+
+    (free-from-children ()
+     (remove-duplicates
+      (flatten
+       (append
+        (get-free-variables-from-children)
+        (get-new-free-variables)))))
+
+    (get-free-variables-from-children ()
+     (map
+      (lambda (child) (update-free-variable-id child) (hash-ref free-variables child))
+      (append
+       (map triple-end (append (graph-neighborhood-edge-forward G id "has child") (graph-neighborhood-edge-forward G id "has arg")))
+       (map triple-start (append (graph-neighborhood-edge-backward G id "has scope") (graph-neighborhood-edge-backward G id "has env"))))))
+
+    (get-new-free-variables ()
+     (map triple-end (append (graph-neighborhood-edge-forward G id "is call to")))
+     (map triple-start (append (graph-neighborhood-edge-forward G id "is defined as")))
+     (if (null? (graph-neighborhood-edge-forward G id "is reified as")) '() (list id)))
+
+    (defined-here ()
+      (append
+       (map triple-start (append (graph-neighborhood-edge-backward G id "has scope") (graph-neighborhood-edge-backward G id "has env")))
+       (map triple-end (graph-neighborhood-edge-forward G id "has formal arg"))))))))
+
+(define (update-bound-variables)
+ (with
+  ((for-each
+    update-bound-variable-id
+    (remove-duplicates (graph-ids G))))
+
+  (update-bound-variable-id (id)
+   (with
+    ((if (hash-has-key? bound-variables id)
+      '()
+       (set! bound-variables (hash-set bound-variables id (bound-from-parent)))))
+
+    (bound-from-parent ()
+     (let ((parent (lexical-parent id)))
+      (append
+       (if (null? parent) '() (begin (update-bound-variable-id parent) (hash-ref bound-variables parent)))
+       (map triple-start (graph-neighborhood-edge-backward G id "has scope"))
+       (map triple-start (graph-neighborhood-edge-backward G id "has env"))
+       (map triple-end (graph-neighborhood-edge-forward G parent "has formal arg")))))))))
 
 (update-free-variables)
+(update-bound-variables)
 
 (define (get-rep id)
  (with
-  ((append (list id) (get-written) (list (nei) (get-free-variables))))
+  ((append (list id) (get-written) (list (nei) (get-free-variables) (get-bound-variables) (lexical-parent id))))
 
   (get-written ()
    (let ((is-func (is-func-t id))
@@ -824,7 +887,10 @@
    (map triple->list (append (graph-neighborhood-forward G id) (graph-neighborhood-backward G id))))
 
   (get-free-variables ()
-   (hash-ref free-variables id))))
+   (hash-ref free-variables id))
+
+  (get-bound-variables ()
+   (hash-ref bound-variables id))))
 
 (display "wait, what in the world?\n")
 (for-all-trees (lambda (tree) (display "asdfghjkl;\n") (display tree) (newline)))

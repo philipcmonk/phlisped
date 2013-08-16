@@ -35,11 +35,11 @@
 
 (define Trees (list
                (apply whole-tree 
-                      (let* ((dummy-n (node '(0 'dummy "dummy" '() '()) '() (delay '()) (lambda (_) "t")))
+                      (let* ((dummy-n (node '(0 'dummy "dummy" '() '() '() '()) '() (delay '()) (lambda (_) "t")))
                              (dummy-utterance (utterance dummy-n 0 0 0 0 0 0 '() (cons '(0 0 0) '(0 0 0)))))
                        (list dummy-n (lambda (a) '()) dummy-utterance (set) '() 0 0 0 0 0 0 1)))
                (apply whole-tree 
-                      (let* ((dummy-n (node '(0 'dummy-bar "dummy bar" '() '()) '() (delay '()) (lambda (_) "r")))
+                      (let* ((dummy-n (node '(0 'dummy-bar "dummy bar" '() '() '() '()) '() (delay '()) (lambda (_) "r")))
                              (dummy-utterance (utterance dummy-n 0 0 0 0 0 0 '() (cons '(0 0 0) '(0 0 0)))))
                        (list dummy-n (lambda (a) '()) dummy-utterance (set) '() 600 30 (- WIDTH 600) 300 0 0 1)))))
 (define Selected-tree (cadr Trees))
@@ -413,7 +413,7 @@
 
 (define SEARCHMODE #f)
 
-(define (enter-search-mode) (set! SEARCHMODE #t) (set! Search-tree (add-to-screen (list 0 'list '() '() '()) (whole-tree-childfunc Selected-tree))))
+(define (enter-search-mode) (set! SEARCHMODE #t) (set! Search-tree (add-to-screen (list 0 'list '() '() '() '() '()) (whole-tree-childfunc Selected-tree))))
 
 (define (exit-search-mode) (set! SEARCHMODE #f))
 
@@ -444,7 +444,11 @@
    (gl-raster-pos 0 210)
    (paint-utterance-data)
    (gl-raster-pos 0 110)
+   (paint-lexical-parent)
+   (gl-raster-pos 0 90)
    (paint-free-variables)
+   (gl-raster-pos 0 70)
+   (paint-bound-variables)
    (gl-raster-pos 0 50)
    (paint-open-set)
    (paint-neighborhood)
@@ -483,8 +487,14 @@
    (gl-raster-pos 0 130)
    (ftglRenderFont Font (format "children:  ~a" (map (lambda (u) ((node-text-func (utterance-node u)) (utterance-node u))) (utterance-args u))) 65535))
 
+  (paint-lexical-parent ()
+   (ftglRenderFont Font (format "lexcial parent:  ~a" (cadddr (cdddr (node-data (utterance-node u))))) 65535))
+
   (paint-free-variables ()
    (ftglRenderFont Font (format "free variables:  ~a" (cadddr (cdr (node-data (utterance-node u))))) 65535))
+
+  (paint-bound-variables ()
+   (ftglRenderFont Font (format "bound variables:  ~a" (cadddr (cddr (node-data (utterance-node u))))) 65535))
 
   (paint-open-set ()
    (ftglRenderFont Font (format "open set:  ~a" (whole-tree-open Selected-tree)) 65535))

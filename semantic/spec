@@ -8,6 +8,8 @@ The triples have an ordering.  Although implemented as a total ordering, the onl
 
 "is" may only be used with start next-id.
 
+If alice is defined as bob, then bob must have env.
+
 If unexpected edges exist, they should be ignored.
 
 Edges:
