@@ -266,7 +266,7 @@
           (has-child (member (triple parent-link2 "has child" link2) (graph-edges G)))
           (has-arg (member (triple parent-link2 "has arg" link2) (graph-edges G)))
           (parent-link2-t (if has-child (car has-child) (if has-arg (car has-arg) '())))
-          (hijito (triple-end (car (graph-neighborhood-edge-forward G LINK1 "is call to"))))
+;          (hijito (triple-end (car (graph-neighborhood-edge-forward G LINK1 "is call to"))))
           (is-defined-as (graph-neighborhood-edge-forward G link2 "is defined as"))
           (arg-id Next-id))
     (with
@@ -279,15 +279,15 @@
       (exit-argify-mode))
 
      (add-arg-to-hijito ()
-      (set! G (graph (graph-vertices G) (append (graph-edges G) (list (triple hijito "has formal arg" arg-id) (triple arg-id "is written" 'arger) (triple arg-id "is reified as" (string->symbol (format "a~s" arg-id))))))))
+      (set! G (graph (graph-vertices G) (append (graph-edges G) (list (triple LINK1 "has formal arg" arg-id) (triple arg-id "is written" 'arger) (triple arg-id "is reified as" (string->symbol (format "a~s" arg-id))))))))
 
      (add-arg-to-call ()
       (let ((replacement (if (null? is-defined-as) link2 (triple-end (car is-defined-as)))))
-       (set! G (graph (graph-vertices G) (append (graph-edges G) (list (triple LINK1 "has arg" replacement))))))
-      (set! G (graph (graph-vertices G) (append (graph-edges G) (flatten (map (lambda (t) (set! Next-id (+ 1 Next-id)) (list (triple (triple-start t) "has arg" (- Next-id 1)) (triple (- Next-id 1) "is written" 'yo)))  (remove (triple LINK1 "is call to" hijito) (graph-neighborhood-edge-backward G hijito "is call to"))))))))
+       (set! G (graph (graph-vertices G) (append (graph-edges G) (list (triple LINK1PARENT "has arg" replacement))))))
+      (set! G (graph (graph-vertices G) (append (graph-edges G) (flatten (map (lambda (t) (set! Next-id (+ 1 Next-id)) (list (triple (triple-start t) "has arg" (- Next-id 1)) (triple (- Next-id 1) "is written" 'yo)))  (remove (triple LINK1PARENT "is call to" LINK1) (graph-neighborhood-edge-backward G LINK1 "is call to"))))))))
 
      (convert-var-to-arg ()
-      (set! G (graph (graph-vertices G) ((if (null? is-defined-as) swap-normal swap-var) hijito (graph-edges G)))))
+      (set! G (graph (graph-vertices G) ((if (null? is-defined-as) swap-normal swap-var) LINK1 (graph-edges G)))))
 
      (swap-normal (in-id res)
       (replace parent-link2-t (list (triple parent-link2 (triple-edge parent-link2-t) arg-id)) (graph-edges G)))
@@ -594,6 +594,52 @@
    (set! REDOSTACK (cdr REDOSTACK))
    (update-childfuncs child-fun))))
 
+(define Search-text "")
+(define Search-tree '())
+
+(define (search event)
+ (set! Search-text "")
+ (enter-search-mode))
+
+(define (handle-search event)
+ (let ((c (send event get-key-code)))
+  (cond
+   ((and (char? c) (not (char-whitespace? c)) (not (char-iso-control? c)) (not (member c '(#\( #\) #\[ #\] #\{ #\} #\" #\, #\' #\` #\; #\# #\| #\\))))
+    (set! Search-text (string-append Search-text (string (send event get-key-code))))
+    (set-search-results (map triple->list (search-text Search-text)))
+    (show-search-tree get-rep)
+    (paint-info Search-text #t)
+    (send Thecanvas on-paint))
+   ((eq? c #\backspace)
+    (set! Search-text (substring Search-text 0 (- (string-length Search-text) 1)))
+    (paint-info Search-text #t))
+   ((eq? c #\return)
+    (exit-search-mode))
+   ((eq? c 'escape)
+    (remove-search-tree)
+    (send Thecanvas on-paint)
+    (exit-search-mode))
+   (#t '()))))
+
+(define (search-text text)
+ (let ((regex (regexp text))
+       (texts (graph-filter G (lambda (t) (or (equal? (triple-edge t) "is written") (equal? (triple-edge t) "is named"))))))
+  (filter (lambda (t) (regexp-match? regex (format "~a" (triple-end t)))) texts)))
+
+
+; (display text) (display "\t") (display id) (newline)
+; (let ((is-written (is-written-t id))
+;       (is-named (is-named-t id))
+;       (regex (regexp Search-text)))
+;  (apply append
+;   (if (and is-written (regexp-match? regex (format "~a" (triple-end is-written))))
+;    (list is-written)
+;    '())
+;   (if (and is-named (regexp-match? regex (format "~a" (triple-end is-named))))
+;    (list is-named)
+;    '())
+;   (map (compose (curry search-text text) triple-end) (append (graph-neighborhood-edge-forward G id "has child") (graph-neighborhood-edge-forward G id "is call to") (graph-neighborhood-edge-forward G id "has arg") (graph-neighborhood-edge-forward G id "is defined as"))))))
+
 (add-key-evs (list #\space add-sibling
                    #\( add-child
                    #\i insert-text
@@ -606,12 +652,14 @@
                    #\a argify
                    #\u undo-pop
                    #\r redo-pop
+                   #\/ search
                    'f2 write-to-file
                    'insert handle-insert
                    'link handle-link
                    'var handle-var
                    'scope handle-scope
-                   'argify handle-argify))
+                   'argify handle-argify
+                   'search handle-search))
 
 (define (graph->file g)
  (let ((g (graph (graph-vertices g) (replace (car (graph-neighborhood-edge-forward g 'next-id "is")) (list (triple 'next-id "is" Next-id)) (graph-edges g)))))
@@ -684,8 +732,8 @@
 ;(test->graph->file "testdata2")
 
 (define (yup)
- (display-on-screen 0 330 WIDTH (- HEIGHT 330) (list 0 'list '() '())
-  child-fun))
+ (display-on-screen 0 330 WIDTH (- HEIGHT 330) (list 0 'list '() '()) child-fun)
+ (display "um, so yeah\n"))
  
 (define (is-call-t id)
  (let ((nbhd (graph-neighborhood-edge-forward G id "is call to")))
@@ -700,14 +748,13 @@
    (car nbhd))))
 
 (define (child-fun a)
- (with
-  ((map
-    (compose (curryr get-rep child-fun) triple-end)
-    (append
-     (graph-neighborhood-edge-forward G (car a) "is call to")
-     (graph-neighborhood-edge-forward G (car a) "has child")
-     (graph-neighborhood-edge-forward G (car a) "has arg")
-     (graph-neighborhood-edge-forward G (car a) "is defined as"))))
+ (map
+  (compose get-rep triple-end)
+  (append
+   (graph-neighborhood-edge-forward G (car a) "is call to")
+   (graph-neighborhood-edge-forward G (car a) "has child")
+   (graph-neighborhood-edge-forward G (car a) "has arg")
+   (graph-neighborhood-edge-forward G (car a) "is defined as"))))
 ;  (((compose
 ;     (curry map (compose (curryr get-rep child-fun) triple-end))
 ;     (compose
@@ -715,39 +762,42 @@
 ;      car))
 ;     a))
 
-  (get-rep (id child-fun)
-   (with
-    ((cons id (get-written)))
+(define (get-rep id)
+ (with
+  ((cons id (get-written)))
 
-    (get-written ()
-     (let ((is-func (is-func-t id))
-           (is-named (is-named-t id)))
-      (if is-func
+  (get-written ()
+   (let ((is-func (is-func-t id))
+         (is-named (is-named-t id)))
+    (if is-func
+     (if is-named
+      (list 'scoped (triple-end is-named) (nei))
+      (list 'scoped '--- (nei)))
+     (let ((has-child (graph-neighborhood-edge-forward G id "has child"))
+           (is-written (is-written-t id))
+           (is-defined-as (graph-neighborhood-edge-forward G id "is defined as")))
+      (if (not (null? has-child))
        (if is-named
-        (list 'scoped (triple-end is-named) (nei))
-        (list 'scoped '--- (nei)))
-       (let ((has-child (graph-neighborhood-edge-forward G id "has child"))
-             (is-written (is-written-t id))
-             (is-defined-as (graph-neighborhood-edge-forward G id "is defined as")))
-        (if (not (null? has-child))
+        (list 'list (triple-end is-named) (nei))
+        (if is-written
+         (list 'list (triple-end is-written) (nei))
+         (list 'list '- (nei))))
+       (if is-written
+        (list 'terminal (triple-end is-written) (nei))
+        (if (not (null? is-defined-as))
          (if is-named
-          (list 'list (triple-end is-named) (nei))
-          (if is-written
-           (list 'list (triple-end is-written) (nei))
-           (list 'list '- (nei))))
-         (if is-written
-          (list 'terminal (triple-end is-written) (nei))
-          (if (not (null? is-defined-as))
-           (if is-named
-            (list 'var (triple-end is-named) (nei))
-            (list 'var '-- (nei)))
-           (list 'unknown 'unknown (nei)))))))))
+          (list 'var (triple-end is-named) (nei))
+          (list 'var '-- (nei)))
+         (list 'unknown 'unknown (nei)))))))))
 
-    (nei ()
-     (map triple->list (graph-neighborhood-forward G id)))))))
+  (nei ()
+   (map triple->list (append (graph-neighborhood-forward G id) (graph-neighborhood-backward G id))))))
 
+(display "wait, what in the world?\n")
+(for-all-trees (lambda (tree) (display "asdfghjkl;\n") (display tree) (newline)))
 (yup)
 
+(for-all-trees (lambda (tree) (display "qwertyuiop\n") (display tree) (newline)))
 
 ;(letrec
 ; ((id (triple-start (car (graph-edges G))))

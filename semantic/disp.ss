@@ -21,7 +21,7 @@
 (define-ftgl ftglRenderFont (_fun _FTGLfont _string _int -> _void))
 (define-ftgl ftglDestroyFont (_fun _FTGLfont -> _void))
 
-(provide my-canvas% box-width box-height box-maj-dim node-width node-height node-maj-dim VERTICAL display-on-screen Thecanvas Info Selected-tree utterance-parent utterance-node utterance-args node-data node-laddr whole-tree-selection-u whole-tree-selection set-whole-tree-selection! whole-tree-open set-whole-tree-open! whole-tree-utterance-tree add-key-evs key-evs update-childfuncs set-info enter-insert-mode exit-insert-mode enter-link-mode exit-link-mode enter-var-mode exit-var-mode enter-scope-mode exit-scope-mode enter-argify-mode exit-argify-mode paint-info go find-utterance-from-laddr-safe for-all-trees)
+(provide my-canvas% box-width box-height box-maj-dim node-width node-height node-maj-dim VERTICAL display-on-screen add-to-screen Thecanvas Info Selected-tree utterance-parent utterance-node utterance-args node-data node-laddr whole-tree-selection-u whole-tree-selection set-whole-tree-selection! whole-tree-open set-whole-tree-open! whole-tree-utterance-tree add-key-evs key-evs update-childfuncs set-info enter-insert-mode exit-insert-mode enter-link-mode exit-link-mode enter-var-mode exit-var-mode enter-scope-mode exit-scope-mode enter-argify-mode exit-argify-mode enter-search-mode exit-search-mode set-search-results show-search-tree remove-search-tree paint-info go find-utterance-from-laddr-safe for-all-trees)
 
 (struct node (data laddr prom-args text-func) #:transparent)
 (struct utterance (node x y w h text-w text-h args clr) #:transparent)
@@ -34,16 +34,21 @@
 (define HEIGHT 899)
 
 (define Trees (list
-                (apply whole-tree 
-                       (let* ((dummy-n (node '(0 'dummy "dummy" '()) '() (delay '()) (lambda (_) "t")))
-                              (dummy-utterance (utterance dummy-n 0 0 0 0 0 0 '() (cons '(0 0 0) '(0 0 0)))))
-                        (list dummy-n (lambda (a) '()) dummy-utterance (set) '() 0 0 0 0 0 0 1)))
-                (apply whole-tree 
-                       (let* ((dummy-n (node '(0 'dummy "dummy" '()) '() (delay '()) (lambda (_) "t")))
-                              (dummy-utterance (utterance dummy-n 0 0 0 0 0 0 '() (cons '(0 0 0) '(0 0 0)))))
-                        (list dummy-n (lambda (a) '()) dummy-utterance (set) '() 600 30 (- WIDTH 600) 300 0 0 1)))))
+               (apply whole-tree 
+                      (let* ((dummy-n (node '(0 'dummy "dummy" '()) '() (delay '()) (lambda (_) "t")))
+                             (dummy-utterance (utterance dummy-n 0 0 0 0 0 0 '() (cons '(0 0 0) '(0 0 0)))))
+                       (list dummy-n (lambda (a) '()) dummy-utterance (set) '() 0 0 0 0 0 0 1)))
+               (apply whole-tree 
+                      (let* ((dummy-n (node '(0 'dummy-bar "dummy bar" '()) '() (delay '()) (lambda (_) "r")))
+                             (dummy-utterance (utterance dummy-n 0 0 0 0 0 0 '() (cons '(0 0 0) '(0 0 0)))))
+                       (list dummy-n (lambda (a) '()) dummy-utterance (set) '() 600 30 (- WIDTH 600) 300 0 0 1)))))
 (define Selected-tree (cadr Trees))
 (define Bar-tree (cadr Trees))
+
+(define (for-all-trees f)
+ (for-each f (cdr Trees)))
+
+(for-all-trees (lambda (tree) (display "zxcvbnnm\n") (display (whole-tree-n-tree tree)) (newline)))
 
 (define COLORSCHEME 'alternate)
 (define COLOR1 (cons '(255 255 255) '(0 0 127)))
@@ -72,13 +77,26 @@
 (define (add-key-evs args)
  (set! key-evs (apply hash-set* key-evs args)))
 
+(define (remove-tree tree)
+ (let ((next
+       (let ((r (member tree Trees)))
+        (if (null? (cdr r))
+         (if (null? (cddr Trees))
+          (cadr Trees)
+          (caddr Trees))
+         (cadr r)))))
+       (set! Trees (remove tree Trees))
+       (if (eq? Selected-tree tree)
+        (set! Selected-tree next)
+        '())))
+
 (define key-evs
  (with
   ((hash
     #\n new-tree
     #\N replace-major-tree
     #\tab select-new-tree
-    #\q remove-tree
+    #\q (lambda (_) (remove-tree Selected-tree))
     #\h (lambda (_) (go 'left Selected-tree))
     #\j (lambda (_) (go 'down Selected-tree))
     #\k (lambda (_) (go 'up Selected-tree))
@@ -129,6 +147,7 @@
    (send Thecanvas on-paint))
 
   (select-new-tree (event)
+   (display (map whole-tree-n-tree Trees)) (newline)
    (set! Selected-tree
     (if (send event get-shift-down)
      (let ((r (member Selected-tree (reverse Trees))))
@@ -143,17 +162,6 @@
        (cadr r)))))
    (generate-utterance-tree Selected-tree)
    (send Thecanvas on-paint))
-
-  (remove-tree (event)
-   (let ((next
-         (let ((r (member Selected-tree Trees)))
-          (if (null? (cdr r))
-           (if (null? (cdr Trees))
-            (car Trees)
-            (cadr Trees))
-           (cadr r)))))
-         (set! Trees (remove Selected-tree Trees))
-         (set! Selected-tree next)))
 
   (zoom-out (event)
    (set-whole-tree-offset-x! Selected-tree (- (utterance-y (whole-tree-selection-u Selected-tree))))
@@ -365,15 +373,13 @@
      (VARMODE ((hash-ref key-evs 'var) event))
      (SCOPEMODE ((hash-ref key-evs 'scope) event))
      (ARGIFYMODE ((hash-ref key-evs 'argify) event))
+     (SEARCHMODE ((hash-ref key-evs 'search) event))
      ((hash-has-key? key-evs (send event get-key-code))
       ((hash-ref key-evs (send event get-key-code)) event))
      (#t '())))
   
    (super-instantiate () (style '(gl)))))
   ))
-
-(define (for-all-trees f)
- (for-each f (cdr Trees)))
 
 (define INSERTMODE #f)
 
@@ -405,6 +411,12 @@
 
 (define (exit-argify-mode) (set! ARGIFYMODE #f))
 
+(define SEARCHMODE #f)
+
+(define (enter-search-mode) (set! SEARCHMODE #t) (set! Search-tree (add-to-screen (list 0 'list '() '()) (whole-tree-childfunc Selected-tree))))
+
+(define (exit-search-mode) (set! SEARCHMODE #f))
+
 (define (paint-bar u)
  (with
   ((gl-enable 'scissor-test)
@@ -431,10 +443,11 @@
    (paint-laddr)
    (gl-raster-pos 0 210)
    (paint-utterance-data)
-   (gl-raster-pos 0 110)
+   (gl-raster-pos 0 50)
    (paint-open-set)
    (paint-neighborhood)
-   (set-tree))
+   (set-tree)
+   (paint-search-results))
 
   (paint-name ()
    (ftglRenderFont Font ((node-text-func (utterance-node u)) (utterance-node u)) 65535))
@@ -472,13 +485,14 @@
    (ftglRenderFont Font (format "open set:  ~a" (whole-tree-open Selected-tree)) 65535))
 
   (paint-neighborhood ()
-   (map paint-triple (cadddr (node-data (utterance-node u))) (build-list (length (cadddr (node-data (utterance-node u)))) identity)))
+   (map (curryr paint-triple 300 310) (cadddr (node-data (utterance-node u))) (build-list (length (cadddr (node-data (utterance-node u)))) identity)))
 
-  (paint-triple (t n)
-   (gl-raster-pos 300 (- 310 (* 20 n)))
+  (paint-triple (t n x y)
+   (gl-raster-pos x (- y (* 20 n)))
    (ftglRenderFont Font (format "~a" t) 65535))
 
   (set-tree ()
+   (display "set-tree\n")
    (set-whole-tree-childfunc! Bar-tree (whole-tree-childfunc Selected-tree))
    (set-whole-tree-n-tree! Bar-tree (root->node (node-data (utterance-node u)) (whole-tree-childfunc Bar-tree) '()))
    (set-whole-tree-open! Bar-tree (set))
@@ -487,7 +501,32 @@
    (set-whole-tree-offset-y! Bar-tree 0)
    (set-whole-tree-zoom! Bar-tree 1)
    (generate-utterance-tree Bar-tree)
-   (open-u (whole-tree-utterance-tree Bar-tree) #t Bar-tree))))
+   (open-u (whole-tree-utterance-tree Bar-tree) #t Bar-tree))
+
+  (paint-search-results ()
+   (map (curryr paint-triple (- WIDTH 300) 310) Search-results (build-list (length Search-results) identity)))))
+
+(define Search-results '())
+(define Search-tree '())
+
+(define (set-search-results res) (set! Search-results res))
+
+(define (show-search-tree get-rep)
+ (if (null? Search-results)
+  '()
+  (begin
+   (set-whole-tree-childfunc! Search-tree (whole-tree-childfunc Selected-tree))
+   (set-whole-tree-n-tree! Search-tree (root->node (get-rep (caar Search-results)) (whole-tree-childfunc Search-tree) '()))
+   (set-whole-tree-open! Search-tree (set))
+   (set-whole-tree-selection! Search-tree '())
+   (set-whole-tree-offset-x! Search-tree 0)
+   (set-whole-tree-offset-y! Search-tree 0)
+   (set-whole-tree-zoom! Search-tree 1)
+   (generate-utterance-tree Search-tree)
+   (open-u (whole-tree-utterance-tree Search-tree) #t Search-tree))))
+
+(define (remove-search-tree)
+ (remove-tree Search-tree))
 
 (define (set-info text)
  (set! Info text))
@@ -495,7 +534,6 @@
 (define (paint-info text swap)
  (gl-enable 'scissor-test)
  (apply gl-scissor (rel->gl Info-dim))
-; (apply gl-viewport (rel->gl Info-dim))
  (gl-viewport 0 0 WIDTH 30)
  (gl-matrix-mode 'projection)
  (gl-load-identity)
@@ -623,7 +661,6 @@
 
 (define (generate-utterance-tree tree)
  (set-whole-tree-utterance-tree! tree (node->utterance (whole-tree-n-tree tree) (utterance-x (whole-tree-utterance-tree tree)) (utterance-y (whole-tree-utterance-tree tree)) (if VERTICAL (node-width (whole-tree-n-tree tree) tree) -1) 0 1 tree)))
-; (set-whole-tree-selection-u! tree (find-utterance-from-laddr (whole-tree-utterance-tree tree) (node-laddr (utterance-node (whole-tree-selection-u tree))))))
 
 (define (find-utterance-from-laddr tree laddr)
  (if (null? laddr)
@@ -644,8 +681,9 @@
  (send Thecanvas on-paint))
 
 (define (add-to-screen root childfunc)
- (display-on-screen 0 0 (/ WIDTH 2) 0 root childfunc)
- (normalize-trees))
+ (let ((tree (display-on-screen 0 0 (/ WIDTH 2) 0 root childfunc)))
+  (normalize-trees)
+  tree))
 
 (define (normalize-trees)
  (let* ((num (length (cdddr Trees)))
@@ -678,7 +716,8 @@
     1))))
  (set-whole-tree-utterance-tree! tree (node->utterance (whole-tree-n-tree tree) 0 0 w 0 '() tree))
  (set-whole-tree-selection! tree '())
- (set! Trees (append Trees (list tree)))))
+ (set! Trees (append Trees (list tree)))
+ tree))
 
 (define (node->utterance n x y w row siblings tree)
  (with

@@ -1,0 +1,82 @@
+Copyright Philip Monk, August 2013, All rights reserved.
+
+1. Language
+
+A program is a list of triples.
+
+The triples have an ordering.  Although implemented as a total ordering, the only comparisons that should be relied upon are those with the same start and edge values.  The only edges where this is applicable are the "has child", "has arg", and "has formal arg".  All other edges are singletons, i.e. for each start there must be no more than one triple with any given edge.
+
+"is" may only be used with start next-id.
+
+If unexpected edges exist, they should be ignored.
+
+Edges:
+        "has child"
+        "has arg"
+        "has formal arg"
+	"is defined as"
+	"is named"
+	"is written"
+	"is reified as"
+	"is call to"
+	"has scope"
+	"has env"
+	"is"
+
+May (x) or must (Y) be used in conjunction with:
+
+	hc	ha	hfa	ida	in	iw	ira	ict	hs	he	is
+hc	x		x		x				x
+ha		x	x		x			Y	x
+hfa	x	x	x	x	x	x		x	Y	
+ida			x		x				x	Y
+in	x	x	x	x				x	x	x
+iw			x				x		x
+ira						Y
+ict		x	x		x				x
+hs	x	x	x	x	x	x		x
+he			x	x	x
+is
+
+3. Trees
+
+Trees is a list of whole-tree.
+
+The first element of Trees must be a dummy tree, the second element must be the Bar-tree, and there must always be a third element.  The contents of the dummy tree should never have a functional impact.
+
+4. Selected-tree
+
+Selected-tree must always point to a valid tree.
+
+4. Bar-tree
+
+Bar-tree must always point to a valid tree.
+
+5. whole-tree
+
+A whole-tree contains all the data necessary to display a tree on the screen.
+
+n-tree is a valid node.
+
+childfunc is a function that takes one argument (namely, the data of a particular node), and returns the children of this node in the current tree.  This function should return the same value each time it is called with the same input.  If this function is changed, the n-tree and utterance-tree should be regenerated and the selection and open set cleared.
+
+utterance-tree is a tree of utterances.  utterance-node should provide an injective mapping from the utterances in utterance-tree to the nodes in n-tree.
+
+open is a set of laddrs.  Each laddr must correspond to a valid utterance.
+
+selection is a laddr.  selection must correspond to a valid utterance.
+
+x y w h offset-x offset-y zoom are numbers.  zoom must be positive.
+
+6. utterance
+
+An utterance contains all the data necessary to display a single node.
+
+node is a valid node.
+
+x y w h text-w text-h are nonnegative numbers.
+
+args is an eargerly-evaluated list of utterances.  An utterance may not be its own descendant.
+
+clr is a pair of the form (f . b) where f is a foreground color and b is a background color.  Both f and b are lists of length three representing rgb on a scale of 0-255.
+
