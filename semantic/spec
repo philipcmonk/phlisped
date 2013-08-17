@@ -25,7 +25,7 @@ Edges:
 	"has env"
 	"is"
 
-May (x) or must (Y) be used in conjunction with:
+May (x) or must (Y) be used in conjunction with: (Y means if the row-edge is present, then the column-edge must be present, but the converse is not necessarily true)
 
 	hc	ha	hfa	ida	in	iw	ira	ict	hs	he	is
 hc	x		x		x				x
@@ -38,6 +38,16 @@ ira						Y
 ict		x	x		x				x
 hs	x	x	x	x	x	x		x
 he			x	x	x
+is
+
+	hc	hfa	ida	in	iw	ira	he	is
+hc	x			x			
+hfa		x	Y	x			Y
+ida		x		x			Y
+in	x	x	x				x
+iw						x
+ira					Y
+he		x	x	x
 is
 
 3. Trees

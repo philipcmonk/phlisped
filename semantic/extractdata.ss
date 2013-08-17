@@ -77,7 +77,6 @@
 
 (set! Next-id (triple-end (car (graph-neighborhood-edge-forward G 'next-id "is"))))
 
-; XXX shouldn't allow adding args
 (define (add-sibling event)
  (let* ((id (selected-id Selected-tree))
         (parent-id (selected-parent-id Selected-tree))
@@ -93,7 +92,7 @@
 ;                       (add-arg-in-middle)))))
       (update-open)
       (set! Next-id (+ 1 Next-id))
-      (update-free-variables) (update-bound-variables)
+      (update-data)
       (update-childfuncs child-fun)
       (go 'right Selected-tree))))
  
@@ -142,7 +141,7 @@
       (set! G (graph (graph-vertices G) (add-child-at-beginning)))
       (set! Next-id (+ 1 Next-id))
       (update-open)
-      (update-free-variables) (update-bound-variables)
+      (update-data)
       (update-childfuncs child-fun)
       (go 'down Selected-tree))))
    
@@ -188,7 +187,9 @@
       (insert-text event))
      ((eq? c #\return)
       (remove-search-tree)
-      (link-to (selected-id Selected-tree) (caar Search-results))
+      (if (send event get-shift-down)
+       (write-text-to-graph)
+       (link-to (selected-id Selected-tree) (caar Search-results)))
 ;      (write-text-to-graph)
       (exit-insert-mode))
      ((eq? c 'escape)
@@ -216,7 +217,7 @@
    ((not (null? is-call-to-2))
     (set! G (graph (graph-vertices G) (append (remove (is-written-t id1) (graph-edges G)) (list (triple id1 "is call to" id2)) (flatten (map (lambda (t) (set! Next-id (+ 1 Next-id)) (list (triple id1 "has arg" (- Next-id 1)) (triple (- Next-id 1) "is written" 'bill))) (graph-neighborhood-edge-forward G id2 "has formal arg")))))))
    (#t '())))
- (update-free-variables) (update-bound-variables)
+ (update-data)
  (update-childfuncs child-fun))
 
 (define (search-bound-variables data text)
@@ -236,7 +237,7 @@
                      (if (null? is-named)
                       (add-name)
                       (set-name)))))
-    (update-free-variables) (update-bound-variables)
+    (update-data)
     (update-childfuncs child-fun))
 
    (get-insert-text ()
@@ -314,7 +315,7 @@
       (add-arg-to-hijito)
       (add-arg-to-call)
       (convert-var-to-arg)
-      (update-free-variables) (update-bound-variables)
+      (update-data)
       (update-childfuncs child-fun)
       (exit-argify-mode))
 
@@ -367,7 +368,7 @@
     (with
      ((undo-push)
       (swap-scope)
-      (update-free-variables) (update-bound-variables)
+      (update-data)
       (update-childfuncs child-fun)
       (exit-scope-mode))
 
@@ -412,7 +413,7 @@
       (if (has-definition?)
        (swap-child)
        (interlocute-and-swap))
-      (update-free-variables) (update-bound-variables)
+      (update-data)
       (update-childfuncs child-fun)
       (exit-var-mode))
 
@@ -478,7 +479,7 @@
 ;        (if (null? has-child)
          (add-call-to-plus-scope))
 ;         (add-call-to-and-change-original has-child))))
-      (update-free-variables) (update-bound-variables)
+      (update-data)
       (update-childfuncs child-fun)
       (exit-link-mode))
 
@@ -509,7 +510,7 @@
     (set-whole-tree-open! tree (adjust-laddr-interlocute id (last (whole-tree-selection Selected-tree)) tree))))
   (set! G (graph (graph-vertices G) (replace parent-link-t (list (triple parent-id (triple-edge parent-link-t) Next-id) (triple Next-id "is call to" id) (triple id "has scope" parent-id)) (graph-edges G))))
   (set! Next-id (+ 1 Next-id))
-  (update-free-variables) (update-bound-variables)
+  (update-data)
   (update-childfuncs child-fun)))
 
 (define (adjust-laddr-interlocute id pos tree)
@@ -544,7 +545,7 @@
       (update-open)
       (update-selection)
       (remove-child)
-      (update-free-variables) (update-bound-variables)
+      (update-data)
       (update-childfuncs child-fun))))
 
    (update-selection ()
@@ -626,7 +627,7 @@
    (set-whole-tree-open! Selected-tree (cadar UNDOSTACK))
    (set-whole-tree-selection! Selected-tree (caddar UNDOSTACK))
    (set! UNDOSTACK (cdr UNDOSTACK))
-   (update-free-variables) (update-bound-variables)
+   (update-data)
    (update-childfuncs child-fun))))
 
 (define (redo-pop event)
@@ -638,7 +639,7 @@
    (set-whole-tree-open! Selected-tree (cadar REDOSTACK))
    (set-whole-tree-selection! Selected-tree (caddar REDOSTACK))
    (set! REDOSTACK (cdr REDOSTACK))
-   (update-free-variables) (update-bound-variables)
+   (update-data)
    (update-childfuncs child-fun))))
 
 (define Search-text "")
@@ -885,6 +886,11 @@
 (define free-variables (hash))
 (define bound-variables (hash))
 
+(define (update-data)
+ (set! free-variables (hash))
+ (set! bound-variables (hash))
+ (update-free-variables)
+ (update-bound-variables))
 
 (define (update-free-variables)
  (with
@@ -943,7 +949,7 @@
        (map triple-start (graph-neighborhood-edge-backward G id "has env"))
        (map triple-end (graph-neighborhood-edge-forward G parent "has formal arg")))))))))
 
-(update-free-variables) (update-bound-variables)
+(update-data)
 
 (yup)
 
