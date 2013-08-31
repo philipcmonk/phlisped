@@ -21,7 +21,7 @@
 (define-ftgl ftglRenderFont (_fun _FTGLfont _string _int -> _void))
 (define-ftgl ftglDestroyFont (_fun _FTGLfont -> _void))
 
-(provide my-canvas% box-width box-height box-maj-dim node-width node-height node-maj-dim VERTICAL display-on-screen add-to-screen Thecanvas Info Selected-tree utterance-parent utterance-node utterance-args node-data node-laddr whole-tree-selection-u whole-tree-selection set-whole-tree-selection! whole-tree-open set-whole-tree-open! whole-tree-utterance-tree add-key-evs key-evs update-childfuncs set-info enter-insert-mode exit-insert-mode enter-link-mode exit-link-mode enter-var-mode exit-var-mode enter-scope-mode exit-scope-mode enter-argify-mode exit-argify-mode enter-search-mode exit-search-mode set-search-results Search-results show-search-tree scroll-search-results remove-search-tree paint-info go find-utterance-from-laddr-safe for-all-trees)
+(provide my-canvas% box-width box-height box-maj-dim node-width node-height node-maj-dim VERTICAL display-on-screen add-to-screen Thecanvas Info Selected-tree utterance-parent utterance-node utterance-args node-data node-laddr whole-tree-selection-u whole-tree-selection set-whole-tree-selection! whole-tree-open set-whole-tree-open! whole-tree-utterance-tree add-key-evs key-evs update-childfuncs set-info enter-insert-mode exit-insert-mode enter-var-mode exit-var-mode enter-scope-mode exit-scope-mode enter-argify-mode exit-argify-mode enter-search-mode exit-search-mode set-search-results Search-results show-search-tree scroll-search-results remove-search-tree paint-info go find-utterance-from-laddr-safe for-all-trees)
 
 (struct node (data laddr prom-args text-func) #:transparent)
 (struct utterance (node x y w h text-w text-h args clr) #:transparent)
@@ -50,17 +50,35 @@
 
 (for-all-trees (lambda (tree) (display "zxcvbnnm\n") (display (whole-tree-n-tree tree)) (newline)))
 
+(define VAR1 0)
+(define VAR2 0)
+(define VAR3 0)
+(define VAR1OFFSET 8)
+(define VAR2OFFSET 8)
+(define VAR3OFFSET 8)
+(define VAR1MIN 0)
+(define VAR2MIN 0)
+(define VAR3MIN 0)
+(define VAR1MAX 255)
+(define VAR2MAX 255)
+(define VAR3MAX 255)
+
 (define COLORSCHEME 'alternate)
-(define COLOR1 (cons '(255 255 255) '(0 0 127)))
-(define COLOR2 (cons '(255 255 255) '(63 0 127)))
-(define COLOR3 (cons '(255 255 255) '(0 63 127)))
-(define COLOR4 (cons '(255 255 255) '(63 63 127)))
-(define COLOR5 (cons '(255 255 255) '(0 0 159)))
-(define COLOR6 (cons '(255 255 255) '(0 0 159)))
+;(define COLOR1 (cons '(255 255 255) '(0 0 96)))
+;(define COLOR2 (cons '(255 255 255) '(48 0 96)))
+;(define COLOR3 (cons '(255 255 255) '(0 48 96)))
+;(define COLOR4 (cons '(255 255 255) '(48 48 96)))
+;(define COLOR1 (cons '(255 255 255) '(96 0 0)))
+;(define COLOR2 (cons '(255 255 255) '(96 32 0)))
+;(define COLOR3 (cons '(255 255 255) '(96 72 0)))
+;(define COLOR4 (cons '(255 255 255) '(96 96 0)))
+;(define COLOR5 (cons '(255 255 255) '(80 0 0)))
+;(define COLOR6 (cons '(255 255 255) '(80 0 0)))
 (define CODECOLOR1 (cons '(255 255 255) '(255 0 0)))
 (define CODECOLOR2 (cons '(255 255 255) '(223 0 0)))
 (define CODECOLOR3 (cons '(255 255 255) '(191 0 0)))
-(define SELCOLOR (cons '(128 0 128) '(0 191 0)))
+;(define SELCOLOR (cons '(255 255 255) '(0 0 255)))
+;(define SEL2COLOR (cons '(255 255 255) '(112 0 112)))
 (define INFOCOLOR (cons '(255 255 255) '(0 0 0)))
 (define BGCOLOR "black")
 (define INITIALCOLOR '(0 0 127))
@@ -116,8 +134,38 @@
     #\7 (curry nth-child 7)
     #\8 (curry nth-child 8)
     #\9 (curry nth-child 9)
-    'wheel-up (lambda (_) (set-whole-tree-offset-x! Selected-tree (+ SCROLLDIST (whole-tree-offset-x Selected-tree))) (send Thecanvas on-paint))
-    'wheel-down (lambda (_) (set-whole-tree-offset-x! Selected-tree (+ (- SCROLLDIST) (whole-tree-offset-x Selected-tree))) (send Thecanvas on-paint))
+    'wheel-up (lambda (event)
+               (if (or (send event get-control-down) (send event get-shift-down) (send event get-meta-down))
+                (begin
+                 (if (send event get-control-down)
+                  (set! VAR1 (max (min (+ VAR1 VAR1OFFSET) VAR1MAX) VAR1MIN))
+                  '())
+                 (if (send event get-shift-down)
+                  (set! VAR2 (max (min (+ VAR2 VAR2OFFSET) VAR2MAX) VAR2MIN))
+                  '())
+                 (if (send event get-meta-down)
+                  (set! VAR3 (max (min (+ VAR3 VAR3OFFSET) VAR3MAX) VAR3MIN))
+                  '())
+                 (generate-utterance-tree Selected-tree))
+                (set-whole-tree-offset-x! Selected-tree (+ SCROLLDIST (whole-tree-offset-x Selected-tree))))
+               (send Thecanvas on-paint))
+    'wheel-down (lambda (event)
+                 (if (or (send event get-control-down) (send event get-shift-down) (send event get-meta-down))
+                  (begin
+                   (if (send event get-control-down)
+                    (set! VAR1 (max (min (- VAR1 VAR1OFFSET) VAR1MAX) VAR1MIN))
+                    '())
+                   (if (send event get-shift-down)
+                    (set! VAR2 (max (min (- VAR2 VAR2OFFSET) VAR2MAX) VAR2MIN))
+                    '())
+                   (if (send event get-meta-down)
+                    (set! VAR3 (max (min (- VAR3 VAR3OFFSET) VAR3MAX) VAR3MIN))
+                    '())
+                   (generate-utterance-tree Selected-tree))
+                  (set-whole-tree-offset-x! Selected-tree (+ (- SCROLLDIST) (whole-tree-offset-x Selected-tree))))
+                 (send Thecanvas on-paint))
+;    'wheel-up (lambda (_) (set-whole-tree-offset-x! Selected-tree (+ SCROLLDIST (whole-tree-offset-x Selected-tree))) (send Thecanvas on-paint))
+;    'wheel-down (lambda (_) (set-whole-tree-offset-x! Selected-tree (+ (- SCROLLDIST) (whole-tree-offset-x Selected-tree))) (send Thecanvas on-paint))
     'wheel-left (lambda (_) (set-whole-tree-offset-y! Selected-tree (+ SCROLLDIST (whole-tree-offset-y Selected-tree))) (send Thecanvas on-paint))
     'wheel-right (lambda (_) (set-whole-tree-offset-y! Selected-tree (+ (- SCROLLDIST) (whole-tree-offset-y Selected-tree))) (send Thecanvas on-paint))
     ))
@@ -322,7 +370,7 @@
               (if (< (whole-tree-zoom tree) 1) '()
                (draw-text
                 text
-                (* (whole-tree-zoom tree) (center x w text-w (- (whole-tree-offset-x tree)) (whole-tree-w tree)))
+                (* (whole-tree-zoom tree) (center x w (- text-w PADDING) (- (whole-tree-offset-x tree)) (whole-tree-w tree)))
                 (* (whole-tree-zoom tree) (+ text-h -3 (center y h text-h (- (whole-tree-offset-y tree)) (whole-tree-h tree))))
                 (car clr)
                 tree))
@@ -369,7 +417,6 @@
    (define/override (on-char event)
     (cond
      (INSERTMODE ((hash-ref key-evs 'insert) event))
-     (LINKMODE ((hash-ref key-evs 'link) event))
      (VARMODE ((hash-ref key-evs 'var) event))
      (SCOPEMODE ((hash-ref key-evs 'scope) event))
      (ARGIFYMODE ((hash-ref key-evs 'argify) event))
@@ -386,12 +433,6 @@
 (define (enter-insert-mode) (set! INSERTMODE #t) (set! Search-tree (add-to-screen (list 0 'list '() '() '() '() '()) (whole-tree-childfunc Selected-tree))))
 
 (define (exit-insert-mode) (set! INSERTMODE #f))
-
-(define LINKMODE #f)
-
-(define (enter-link-mode) (set! LINKMODE #t))
-
-(define (exit-link-mode) (set! LINKMODE #f))
 
 (define VARMODE #f)
 
@@ -451,6 +492,8 @@
    (paint-bound-variables)
    (gl-raster-pos 0 50)
    (paint-open-set)
+   (gl-raster-pos 0 30)
+   (paint-vars)
    (paint-neighborhood)
    (set-tree)
    (paint-search-results))
@@ -498,6 +541,9 @@
 
   (paint-open-set ()
    (ftglRenderFont Font (format "open set:  ~a" (whole-tree-open Selected-tree)) 65535))
+
+  (paint-vars ()
+   (ftglRenderFont Font (format "VAR1:  ~a VAR2:  ~a VAR3:  ~a" VAR1 VAR2 VAR3) 65535))
 
   (paint-neighborhood ()
    (map (curryr paint-triple 300 310) (cadddr (node-data (utterance-node u))) (build-list (length (cadddr (node-data (utterance-node u)))) identity)))
@@ -634,8 +680,10 @@
 (define Font (ftglCreateBitmapFont "/home/philip/olddesktop/vilisp/VeraMono.ttf"))
 (ftglSetFontFaceSize Font 12 72)
 
+(define PADDING 5)
+
 (define (box-width box)
- (ftglGetFontAdvance Font box))
+ (+ PADDING (ftglGetFontAdvance Font box)))
 
 (define (box-height box)
  (ftglGetFontLineHeight Font))
@@ -735,6 +783,59 @@
  (set! Trees (append Trees (list tree)))
  tree))
 
+;(define get-color (lambda (a94 a95) (letrec ((v35 a95)(v26 a94)) (if (equal? (node-laddr v26) (whole-tree-selection v35)) SELCOLOR (if (equal? (car (node-data v26)) (car (node-data (utterance-node (whole-tree-selection-u v35))))) SEL2COLOR (letrec ((v85 (if (null? (node-laddr v26)) 0 (last (node-laddr v26))))) (if (odd? (length (node-laddr v26))) (if (zero? v85) COLOR5 (if (odd? v85) COLOR1 COLOR2)) (if (zero? v85) COLOR6 (if (odd? v85) COLOR3 COLOR4)))))))))
+
+;(define get-color (lambda (a94 a95) (letrec ((v35 a95) (v26 a94) (v96 (cons (quote (255 255 255)) (quote (0 0 255))))) (if (equal? (node-laddr v26) (whole-tree-selection v35)) v96 (letrec ((v110 (cons (quote (255 255 255)) (quote (112 0 112))))) (if (equal? (car (node-data v26)) (car (node-data (utterance-node (whole-tree-selection-u v35))))) v110 (letrec ((v85 (if (null? (node-laddr v26)) 0 (last (node-laddr v26)))) (v188 (cons (quote (255 255 255)) (quote (80 0 0))))) (if (odd? (length (node-laddr v26))) (if (zero? v85) v188 (letrec ((v146 (cons (quote (255 255 255)) (quote (96 32 0)))) (v144 (lambda () -)) (v128 (cons (quote (255 255 255)) (quote (96 0 0))))) (if (odd? v85) v128 v146))) (if (zero? v85) v188 (letrec ((v160 (cons (quote (255 255 255)) (quote (96 72 0)))) (v174 (cons (quote (255 255 255)) (quote (96 96 0))))) (if (odd? v85) v160 v174)))))))))))
+
+(define h (make-hash))
+
+(define get-color (lambda (a94 a95) (set! h (make-hash)) (letrec ((v35 a95) (v26 a94) (v96 (let ((res (cons (let ((res (quote (255 255 255)))) (hash-set! h 98 (cons res (hash-ref! h 98 (quote ())))) res) (let ((res (quote (0 0 255)))) (hash-set! h 104 (cons res (hash-ref! h 104 (quote ())))) res)))) (hash-set! h 5 (cons res (hash-ref! h 5 (quote ())))) res))) (let ((res (if (let ((res (equal? (let ((res (node-laddr v26))) (hash-set! h 8 (cons res (hash-ref! h 8 (quote ())))) res) (let ((res (whole-tree-selection v35))) (hash-set! h 9 (cons res (hash-ref! h 9 (quote ())))) res)))) (hash-set! h 4 (cons res (hash-ref! h 4 (quote ())))) res) v96 (letrec ((v110 (let ((res (cons (let ((res (quote (255 255 255)))) (hash-set! h 112 (cons res (hash-ref! h 112 (quote ())))) res) (let ((res (quote (112 0 112)))) (hash-set! h 122 (cons res (hash-ref! h 122 (quote ())))) res)))) (hash-set! h 16 (cons res (hash-ref! h 16 (quote ())))) res))) (let ((res (if (let ((res (equal? (let ((res (car (let ((res (node-data v26))) (hash-set! h 23 (cons res (hash-ref! h 23 (quote ())))) res)))) (hash-set! h 19 (cons res (hash-ref! h 19 (quote ())))) res) (let ((res (car (let ((res (node-data (let ((res (utterance-node (let ((res (whole-tree-selection-u v35))) (hash-set! h 32 (cons res (hash-ref! h 32 (quote ())))) res)))) (hash-set! h 30 (cons res (hash-ref! h 30 (quote ())))) res)))) (hash-set! h 28 (cons res (hash-ref! h 28 (quote ())))) res)))) (hash-set! h 20 (cons res (hash-ref! h 20 (quote ())))) res)))) (hash-set! h 15 (cons res (hash-ref! h 15 (quote ())))) res) v110 (letrec ((v85 (let ((res (if (let ((res (null? (let ((res (node-laddr v26))) (hash-set! h 70 (cons res (hash-ref! h 70 (quote ())))) res)))) (hash-set! h 66 (cons res (hash-ref! h 66 (quote ())))) res) 0 (let ((res (last (let ((res (node-laddr v26))) (hash-set! h 74 (cons res (hash-ref! h 74 (quote ())))) res)))) (hash-set! h 68 (cons res (hash-ref! h 68 (quote ())))) res)))) (hash-set! h 64 (cons res (hash-ref! h 64 (quote ())))) res)) (v188 (let ((res (cons (let ((res (quote (255 255 255)))) (hash-set! h 190 (cons res (hash-ref! h 190 (quote ())))) res) (let ((res (quote (80 0 0)))) (hash-set! h 196 (cons res (hash-ref! h 196 (quote ())))) res)))) (hash-set! h 57 (cons res (hash-ref! h 57 (quote ())))) res))) (let ((res (if (let ((res (odd? (let ((res (length (let ((res (node-laddr v26))) (hash-set! h 52 (cons res (hash-ref! h 52 (quote ())))) res)))) (hash-set! h 50 (cons res (hash-ref! h 50 (quote ())))) res)))) (hash-set! h 46 (cons res (hash-ref! h 46 (quote ())))) res) (let ((res (if (let ((res (zero? v85))) (hash-set! h 56 (cons res (hash-ref! h 56 (quote ())))) res) v188 (letrec ((v146 (let ((res (cons (let ((res (quote (255 255 255)))) (hash-set! h 148 (cons res (hash-ref! h 148 (quote ())))) res) (let ((res (quote (96 32 0)))) (hash-set! h 154 (cons res (hash-ref! h 154 (quote ())))) res)))) (hash-set! h 145 (cons res (hash-ref! h 145 (quote ())))) res)) (v144 (lambda () -)) (v128 (let ((res (cons (let ((res (quote (255 255 255)))) (hash-set! h 130 (cons res (hash-ref! h 130 (quote ())))) res) (let ((res (quote (96 0 0)))) (hash-set! h 136 (cons res (hash-ref! h 136 (quote ())))) res)))) (hash-set! h 81 (cons res (hash-ref! h 81 (quote ())))) res))) (let ((res (if (let ((res (odd? v85))) (hash-set! h 80 (cons res (hash-ref! h 80 (quote ())))) res) v128 v146))) (hash-set! h 58 (cons res (hash-ref! h 58 (quote ())))) res))))) (hash-set! h 47 (cons res (hash-ref! h 47 (quote ())))) res) (let ((res (if (let ((res (zero? v85))) (hash-set! h 60 (cons res (hash-ref! h 60 (quote ())))) res) v188 (letrec ((v160 (let ((res (cons (let ((res (quote (255 255 255)))) (hash-set! h 162 (cons res (hash-ref! h 162 (quote ())))) res) (let ((res (quote (96 72 0)))) (hash-set! h 168 (cons res (hash-ref! h 168 (quote ())))) res)))) (hash-set! h 90 (cons res (hash-ref! h 90 (quote ())))) res)) (v174 (let ((res (cons (let ((res (quote (255 255 255)))) (hash-set! h 176 (cons res (hash-ref! h 176 (quote ())))) res) (let ((res (quote (96 96 0)))) (hash-set! h 182 (cons res (hash-ref! h 182 (quote ())))) res)))) (hash-set! h 91 (cons res (hash-ref! h 91 (quote ())))) res))) (let ((res (if (let ((res (odd? v85))) (hash-set! h 89 (cons res (hash-ref! h 89 (quote ())))) res) v160 v174))) (hash-set! h 62 (cons res (hash-ref! h 62 (quote ())))) res))))) (hash-set! h 48 (cons res (hash-ref! h 48 (quote ())))) res)))) (hash-set! h 17 (cons res (hash-ref! h 17 (quote ())))) res))))) (hash-set! h 6 (cons res (hash-ref! h 6 (quote ())))) res))))) (hash-set! h 1 (cons res (hash-ref! h 1 (quote ())))) (display h) (newline) res))))
+
+
+;(define get-color
+;  (lambda (a94 a95)
+;    (letrec ((v35 a95) (v26 a94) (v96 (let ((res (cons (let ((res (quote (let ((res (255 255 255))) (hash-set! h 100 (cons res (hash-ref! h 100 (quote ())))) res)))) (hash-set! h 98 (cons res (hash-ref! h 98 (quote ())))) res) (let ((res (quote (let ((res (0 0 255))) (hash-set! h 106 (cons res (hash-ref! h 106 (quote ())))) res)))) (hash-set! h 104 (cons res (hash-ref! h 104 (quote ())))) res)))) (hash-set! h 5 (cons res (hash-ref! h 5 (quote ())))) res)))
+;      (let ((res
+;              (if (let ((res (equal? (let ((res (node-laddr v26))) (hash-set! h 8 (cons res (hash-ref! h 8 (quote ())))) res) (let ((res (whole-tree-selection v35))) (hash-set! h 9 (cons res (hash-ref! h 9 (quote ())))) res)))) (hash-set! h 4 (cons res (hash-ref! h 4 (quote ())))) res)
+;                v96
+;                (letrec ((v110 (let ((res (cons (let ((res (quote (let ((res (255 255 255))) (hash-set! h 114 (cons res (hash-ref! h 114 (quote ())))) res)))) (hash-set! h 112 (cons res (hash-ref! h 112 (quote ())))) res) (let ((res (quote (let ((res (112 0 112))) (hash-set! h 124 (cons res (hash-ref! h 124 (quote ())))) res)))) (hash-set! h 122 (cons res (hash-ref! h 122 (quote ())))) res)))) (hash-set! h 16 (cons res (hash-ref! h 16 (quote ())))) res)))
+;                  (let ((res (if (let ((res (equal? (let ((res (car (let ((res (node-data v26))) (hash-set! h 23 (cons res (hash-ref! h 23 (quote ())))) res)))) (hash-set! h 19 (cons res (hash-ref! h 19 (quote ())))) res) (let ((res (car (let ((res (node-data (let ((res (utterance-node (let ((res (whole-tree-selection-u v35))) (hash-set! h 32 (cons res (hash-ref! h 32 (quote ())))) res)))) (hash-set! h 30 (cons res (hash-ref! h 30 (quote ())))) res)))) (hash-set! h 28 (cons res (hash-ref! h 28 (quote ())))) res)))) (hash-set! h 20 (cons res (hash-ref! h 20 (quote ())))) res))))
+;                                   (hash-set! h 15 (cons res (hash-ref! h 15 (quote ()))))
+;                                   res)
+;                               v110
+;                               (letrec ((v85 (let ((res (if (let ((res (null? (let ((res (node-laddr v26))) (hash-set! h 70 (cons res (hash-ref! h 70 (quote ())))) res)))) (hash-set! h 66 (cons res (hash-ref! h 66 (quote ())))) res) 0 (let ((res (last (let ((res (node-laddr v26))) (hash-set! h 74 (cons res (hash-ref! h 74 (quote ())))) res)))) (hash-set! h 68 (cons res (hash-ref! h 68 (quote ())))) res))))
+;                                               (hash-set! h 64 (cons res (hash-ref! h 64 (quote ()))))
+;                                               res))
+;                                        (v188 (let ((res (cons (let ((res (quote (let ((res (255 255 255))) (hash-set! h 192 (cons res (hash-ref! h 192 (quote ())))) res)))) (hash-set! h 190 (cons res (hash-ref! h 190 (quote ())))) res) (let ((res (quote (let ((res (80 0 0))) (hash-set! h 198 (cons res (hash-ref! h 198 (quote ())))) res)))) (hash-set! h 196 (cons res (hash-ref! h 196 (quote ())))) res))))
+;                                                (hash-set! h 57 (cons res (hash-ref! h 57 (quote ()))))
+;                                                res)))
+;                                 (let ((res (if (let ((res (odd? (let ((res (length (let ((res (node-laddr v26))) (hash-set! h 52 (cons res (hash-ref! h 52 (quote ())))) res)))) (hash-set! h 50 (cons res (hash-ref! h 50 (quote ())))) res))))
+;                                                  (hash-set! h 46 (cons res (hash-ref! h 46 (quote ()))))
+;                                                  res)
+;                                              (let ((res (if (let ((res (zero? v85)))
+;                                                               (hash-set! h 56 (cons res (hash-ref! h 56 (quote ()))))
+;                                                               res)
+;                                                           v188
+;                                                           (letrec ((v146 (let ((res (cons (let ((res (quote (let ((res (255 255 255))) (hash-set! h 150 (cons res (hash-ref! h 150 (quote ())))) res)))) (hash-set! h 148 (cons res (hash-ref! h 148 (quote ())))) res) (let ((res (quote (let ((res (96 32 0))) (hash-set! h 156 (cons res (hash-ref! h 156 (quote ())))) res)))) (hash-set! h 154 (cons res (hash-ref! h 154 (quote ())))) res)))) (hash-set! h 145 (cons res (hash-ref! h 145 (quote ())))) res)) (v144 (lambda () -)) (v128 (let ((res (cons (let ((res (quote (let ((res (255 255 255))) (hash-set! h 132 (cons res (hash-ref! h 132 (quote ())))) res)))) (hash-set! h 130 (cons res (hash-ref! h 130 (quote ())))) res) (let ((res (quote (let ((res (96 0 0))) (hash-set! h 138 (cons res (hash-ref! h 138 (quote ())))) res)))) (hash-set! h 136 (cons res (hash-ref! h 136 (quote ())))) res)))) (hash-set! h 81 (cons res (hash-ref! h 81 (quote ())))) res)))
+;                                                             (let ((res (if (let ((res (odd? v85))) (hash-set! h 80 (cons res (hash-ref! h 80 (quote ())))) res) v128 v146))) (hash-set! h 58 (cons res (hash-ref! h 58 (quote ())))) res)))))
+;                                                (hash-set! h 47 (cons res (hash-ref! h 47 (quote ())))) res)
+;                                              (let ((res (if (let ((res (zero? v85))) (hash-set! h 60 (cons res (hash-ref! h 60 (quote ())))) res) v188 (letrec ((v160 (let ((res (cons (let ((res (quote (let ((res (255 255 255))) (hash-set! h 164 (cons res (hash-ref! h 164 (quote ())))) res)))) (hash-set! h 162 (cons res (hash-ref! h 162 (quote ())))) res) (let ((res (quote (let ((res (96 72 0))) (hash-set! h 170 (cons res (hash-ref! h 170 (quote ())))) res)))) (hash-set! h 168 (cons res (hash-ref! h 168 (quote ())))) res)))) (hash-set! h 90 (cons res (hash-ref! h 90 (quote ())))) res)) (v174 (let ((res (cons (let ((res (quote (let ((res (255 255 255))) (hash-set! h 178 (cons res (hash-ref! h 178 (quote ())))) res)))) (hash-set! h 176 (cons res (hash-ref! h 176 (quote ())))) res) (let ((res (quote (let ((res (96 96 0))) (hash-set! h 184 (cons res (hash-ref! h 184 (quote ())))) res)))) (hash-set! h 182 (cons res (hash-ref! h 182 (quote ())))) res)))) (hash-set! h 91 (cons res (hash-ref! h 91 (quote ())))) res))) (let ((res (if (let ((res (odd? v85))) (hash-set! h 89 (cons res (hash-ref! h 89 (quote ())))) res) v160 v174))) (hash-set! h 62 (cons res (hash-ref! h 62 (quote ())))) res)))))
+;                                                (hash-set! h 48 (cons res (hash-ref! h 48 (quote ()))))
+;                                                res))))
+;                                   (hash-set! h 17 (cons res (hash-ref! h 17 (quote ()))))
+;                                   res)))))
+;                    (hash-set! h 6 (cons res (hash-ref! h 6 (quote ()))))
+;                    res)))))
+;        (hash-set! h 1 (cons res (hash-ref! h 1 (quote ()))))
+;        res))))
+
+
+;(define get-color (lambda (a94 a95) (letrec ((v35 a95)(v26 a94) (v96 (cons (quote (255 255 255)) (quote (0 0 255))))) (if (equal? (node-laddr v26) (whole-tree-selection v35)) v96 (letrec ((v110 (cons (quote (255 255 255)) (quote (112 0 112))))) (if (equal? (car (node-data v26)) (car (node-data (utterance-node (whole-tree-selection-u v35))))) v110 (letrec ((v85 (if (null? (node-laddr v26)) 0 (last (node-laddr v26))))(v188 (cons (quote (255 255 255)) (quote (80 0 0))))) (if (odd? (length (node-laddr v26))) (if (zero? v85) v188 (letrec ((v146 (cons (quote (255 255 255)) (quote (96 32 0))))(v144 (lambda () -))(v128 (cons (quote (255 255 255)) (quote (96 0 0))))) (if (odd? v85) v128 v146))) (if (zero? v85) v188 (letrec ((v160 (cons (quote (255 255 255)) (quote (96 72 0))))(v174 (cons (quote (255 255 255)) (quote (96 96 0))))) (if (odd? v85) v160 v174)))))))))))
+
+
+;(define get-color (lambda (a94 a95) (letrec ((v35 a95)(v26 a94)(v96 (cons (quote (255 255 255)) (quote (0 0 255))))) (if (equal? (node-laddr v26) (whole-tree-selection v35)) v96 (letrec ((v110 (cons (quote (255 255 255)) (quote (112 0 112))))) (if (equal? (car (node-data v26)) (car (node-data (utterance-node (whole-tree-selection-u v35))))) v110 (letrec ((v85 (if (null? (node-laddr v26)) 0 (last (node-laddr v26))))(v188 (cons (quote (255 255 255)) (quote (80 0 0))))) (if (odd? (length (node-laddr v26))) (if (zero? v85) v188 (letrec ((v146 (cons (quote (255 255 255)) (quote (96 32 0))))(v144 (lambda () -))(v128 (cons (quote (255 255 255)) (quote (96 0 0))))(v142 v2)) (if (odd? v85) v128 v146))) (if (zero? v85) v188 (letrec ((v160 (cons (quote (255 255 255)) (quote (96 72 0))))(v174 (cons (quote (255 255 255)) (quote (96 96 0))))) (if (odd? v85) v160 v174)))))))))))
+
+
 (define (node->utterance n x y w row siblings tree)
  (with
   ((let ((children 
@@ -771,25 +872,27 @@
      (box-width ((node-text-func n) n))
      (box-height ((node-text-func n) n))
      children
-     (get-color n siblings tree))))
+     (get-color n tree))))
 
-  (get-color (n siblings tree)
-   (if (equal? (node-laddr n) (whole-tree-selection tree))
-    SELCOLOR
-    (if (eq? COLORSCHEME 'gradient)
-     (let* ((pos (if (null? (node-laddr n)) 0 (last (node-laddr n))))
-  	  (diff (/ pos (if (zero? siblings) 1 siblings)))
-  	  (col (map + INITIALCOLOR (map round (map * (make-list 3 diff) COLORRANGES)))))
-      (if #f ;(null? (ess-man-args (node-man n)))
-       CODECOLOR1
-       (cons (apply make-object color% FGCOLOR) (apply make-object color% col))))
-     (let* ((row (length (node-laddr n)))
-  	  (col (if (null? (node-laddr n)) 0 (last (node-laddr n)))))
-      (if #f ;(null? (ess-man-args (node-man n)))
-       (if (zero? col) CODECOLOR3 (if (odd? col) CODECOLOR1 CODECOLOR2))
-       (if (odd? row)
-        (if (zero? col) COLOR5 (if (odd? col) COLOR1 COLOR2))
-        (if (zero? col) COLOR6 (if (odd? col) COLOR3 COLOR4))))))))
+;  (get-color (n siblings tree)
+;   (if (equal? (node-laddr n) (whole-tree-selection tree))
+;    SELCOLOR 
+;    (if (equal? (car (node-data n)) (car (node-data (utterance-node (whole-tree-selection-u tree)))))
+;     SEL2COLOR ; (cons '(255 255 255) (list VAR1 VAR2 VAR3))
+;     (if (eq? COLORSCHEME 'gradient)
+;      (let* ((pos (if (null? (node-laddr n)) 0 (last (node-laddr n))))
+;   	  (diff (/ pos (if (zero? siblings) 1 siblings)))
+;   	  (col (map + INITIALCOLOR (map round (map * (make-list 3 diff) COLORRANGES)))))
+;       (if #f ;(null? (ess-man-args (node-man n)))
+;        CODECOLOR1
+;        (cons (apply make-object color% FGCOLOR) (apply make-object color% col))))
+;      (let* ((row (length (node-laddr n)))
+;   	  (col (if (null? (node-laddr n)) 0 (last (node-laddr n)))))
+;       (if #f ;(null? (ess-man-args (node-man n)))
+;        (if (zero? col) CODECOLOR3 (if (odd? col) CODECOLOR1 CODECOLOR2))
+;        (if (odd? row)
+;         (if (zero? col) COLOR5 (if (odd? col) COLOR1 COLOR2))
+;         (if (zero? col) COLOR6 (if (odd? col) COLOR3 COLOR4)))))))))
   ))
 
 (define (root->node data childlist laddr)

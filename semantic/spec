@@ -40,14 +40,15 @@ hs	x	x	x	x	x	x		x
 he			x	x	x
 is
 
-	hc	hfa	ida	in	iw	ira	he	is
+	hc	hfa	ida	in	iw	ira	he	if	is
 hc	x			x			
-hfa		x	Y	x			Y
-ida		x		x			Y
-in	x	x	x				x
+hfa		x	Y	x			Y	Y
+ida		x		x			Y	x
+in	x	x	x				x	x
 iw						x
 ira					Y
-he		x	x	x
+he		x	x	x				x
+if		x	Y	x			x
 is
 
 3. Trees
