@@ -6,7 +6,7 @@
 (provide Thecanvas Info (all-defined-out))
 
 (define FILENAME "extractdata.ss")
-(define GRFILE "datagetcolor")
+(define GRFILE "data2")
 
 (define NEWCODE #f)
 
@@ -523,8 +523,21 @@
    (begin (display whole-laddr) (newline) whole-laddr)
    (remove-laddr-del id pos (list-ref (utterance-args u) (car laddr)) (cdr laddr) whole-laddr)))))
 
-(define (reify-code event) (display (reify G 0 #t)) (newline))
+(define (reify-code event) (display (reify G 0 #f)) (newline))
 
+(define runtime-vals (make-hash))
+
+(define (run-code event)
+ (let ((code (reify G 0 #t))
+       (ns (make-base-namespace)))
+  (print code) (newline)
+  (eval '(define h (make-hash)) ns)
+  (eval code ns)
+  (displayln (eval 'h ns))
+  (set! runtime-vals (eval 'h ns))
+  (update-data)
+  (update-childfuncs child-fun)))
+  
 (define (write-to-file event)
  (graph->file G))
 
@@ -606,6 +619,7 @@
                    #\V add-var
                    #\d delete-link
                    #\r reify-code
+                   #\G run-code
                    #\s set-scope
                    #\L (curry interlocute-lambda #t)
                    #\a argify
@@ -640,7 +654,7 @@
                  (let ((realmeat (map (curry (curryr reify (and tracing? (not (eq? (let ((ress (reify g (triple-end (car has-child)) #f))) (display ress) (newline) ress) 'quote)))) g) (map triple-end has-child))))
                   (if tracing?
                    `(let ((res ,realmeat))
-                     (hash-set! h ,id (cons res (hash-ref! h ,id (quote ()))))
+                     (hash-set! h ,id (append (hash-ref! h ,id (quote ())) (list res)))
                      res)
                    realmeat)))
                 ((not (null? is-defined-as))
@@ -658,7 +672,7 @@
                                                                                             (is-function-in (graph-neighborhood-edge-forward g (triple-start t) "is function")))
                                                                                       (if (null? is-function-in)
                                                                                        (reify g in-id tracing?)
-                                                                                       (list 'lambda (map (compose (curry format "a~s") triple-end) (graph-neighborhood-edge-forward g (triple-start t) "has formal arg")) (reify g in-id tracing?))))))
+                                                                                       (list 'lambda (map (compose string->symbol (curry format "a~s") triple-end) (graph-neighborhood-edge-forward g (triple-start t) "has formal arg")) (reify g in-id tracing?))))))
                       has-env)
                      meat)))
       env)))))
@@ -701,7 +715,7 @@
 ;(test->graph->file "testdata2")
 
 (define (yup)
- (display-on-screen 0 330 WIDTH (- HEIGHT 330) (list 0 'list '() '() '() '() '()) child-fun)
+ (display-on-screen 0 330 WIDTH (- HEIGHT 330) (list 0 'list '() '() '() '() '() '()) child-fun)
  (display "um, so yeah\n"))
  
 (define (is-named-t id)
@@ -720,7 +734,7 @@
 
 (define (get-rep id)
  (with
-  ((append (list id) (get-written id) (list (nei) (get-free-variables) (get-bound-variables) (lex-par))))
+  ((append (list id) (get-written id) (list (nei) (get-free-variables) (get-bound-variables) (lex-par) (runtime-values))))
 
   (nei ()
    (map triple->list (append (graph-neighborhood-forward G id) (graph-neighborhood-backward G id))))
@@ -733,8 +747,12 @@
 
   (lex-par ()
    (let ((parent (lexical-parent id)))
-    (cons parent (cadr (get-written parent)))))))
-
+    (cons parent (cadr (get-written parent)))))
+  
+  (runtime-values ()
+   (if (hash-has-key? runtime-vals id)
+    (hash-ref runtime-vals id)
+    '()))))
 
 (define (get-written id)
  (let ((is-func (is-func-t id))
