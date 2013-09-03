@@ -6,7 +6,7 @@
 (provide Thecanvas Info (all-defined-out))
 
 (define FILENAME "extractdata.ss")
-(define GRFILE "data2")
+(define GRFILE "datagetcolor")
 
 (define NEWCODE #f)
 
