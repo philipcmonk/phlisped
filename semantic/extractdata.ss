@@ -1,9 +1,9 @@
 #lang racket
 
-(require "graph.ss" "find.ss" "disp.ss")
+(require "graph.ss" "disp.ss")
 (require racket/set)
 
-(provide Thecanvas Info (all-defined-out))
+(provide Thecanvas Info (all-defined-out) update-childfuncs)
 
 (define FILENAME "extractdata.ss")
 (define GRFILE "datagetcolor")
@@ -73,35 +73,68 @@
 
 (set! Next-id (triple-end (car (graph-neighborhood-edge-forward G 'next-id "is"))))
 
+(define (updater
+         #:undoer (undoer undo-push)
+         #:graph-changer (graph-changer values)
+         #:open-updater (open-updater values)
+         #:data-updater (data-updater update-data)
+         #:childfuncs-updater (childfuncs-updater (lambda () (update-childfuncs child-fun)))
+         #:selection-updater (selection-updater values))
+ (undoer)
+ (graph-changer)
+ (open-updater)
+ (data-updater)
+ (childfuncs-updater)
+ (selection-updater))
+
 (define (add-sibling event)
  (let* ((id (selected-id Selected-tree))
         (parent-id (selected-parent-id Selected-tree)))
-  (with
-   ((undo-push)
- (display "yo\n")
-    (set! G (graph (graph-vertices G) (add-child)))
- (display "yo\n")
-    (update-open)
-    (set! Next-id (+ 1 Next-id))
-    (update-data)
-    (update-childfuncs child-fun)
-    (go 'right Selected-tree))
- 
-   (add-child ()
-    (replace (triple parent-id "has child" id) (list (triple parent-id "has child" id) (triple parent-id "has child" Next-id) (triple Next-id "is written" '-)) (graph-edges G)))
- 
-   (update-open ()
-    (for-all-trees
-     (lambda (tree)
-      (set-whole-tree-open! tree
-                            (set-union
-                             (list->set
-                              (set-map
-                               (whole-tree-open tree)
-                               (curry adjust-laddr id
-                                      (last (whole-tree-selection Selected-tree))
-                                      (whole-tree-utterance-tree tree))))
-                             (set (append (drop-right (whole-tree-selection Selected-tree) 1) (list (+ 1 (last (whole-tree-selection Selected-tree))))))))))))))
+  (updater
+   #:graph-changer     (lambda ()
+                        (set! G (graph-replace-edges G (triple parent-id "has child" id) (list (triple parent-id "has child" id) (triple parent-id "has child" Next-id) (triple Next-id "is written" '-))))
+                        (set! Next-id (+ 1 Next-id)))
+   #:open-updater      (lambda ()
+                        (for-all-trees
+                         (lambda (tree)
+                          (set-whole-tree-open! tree
+                                                (set-union
+                                                 (list->set
+                                                  (set-map
+                                                   (whole-tree-open tree)
+                                                   (curry adjust-laddr id
+                                                          (last (whole-tree-selection Selected-tree))
+                                                          (whole-tree-utterance-tree tree))))
+                                                 (set (append (drop-right (whole-tree-selection Selected-tree) 1) (list (+ 1 (last (whole-tree-selection Selected-tree)))))))))))
+   #:selection-updater (lambda () (go 'right Selected-tree)))))
+
+;(define (add-sibling event)
+; (let* ((id (selected-id Selected-tree))
+;        (parent-id (selected-parent-id Selected-tree)))
+;  (with
+;   ((undo-push)
+;    (set! G (graph-replace-edges G (triple parent-id "has child" id) (list (triple parent-id "has child" id) (triple parent-id "has child" Next-id) (triple Next-id "is written" '-))))
+;    (update-open)
+;    (set! Next-id (+ 1 Next-id))
+;    (update-data)
+;    (update-childfuncs child-fun)
+;    (go 'right Selected-tree))
+; 
+;;   (add-child ()
+;;    (replace (triple parent-id "has child" id) (list (triple parent-id "has child" id) (triple parent-id "has child" Next-id) (triple Next-id "is written" '-)) (graph-edges G)))
+; 
+;   (update-open ()
+;    (for-all-trees
+;     (lambda (tree)
+;      (set-whole-tree-open! tree
+;                            (set-union
+;                             (list->set
+;                              (set-map
+;                               (whole-tree-open tree)
+;                               (curry adjust-laddr id
+;                                      (last (whole-tree-selection Selected-tree))
+;                                      (whole-tree-utterance-tree tree))))
+;                             (set (append (drop-right (whole-tree-selection Selected-tree) 1) (list (+ 1 (last (whole-tree-selection Selected-tree))))))))))))))
 
 (define (adjust-laddr id pos u laddr)
  (if (null? laddr)
@@ -113,25 +146,41 @@
 (define (add-child event)
  (let* ((id (selected-id Selected-tree))
         (is-defined-as (graph-neighborhood-edge-forward G id "is defined as")))
-  (with
-   ((if (not (null? is-defined-as))
-     '()
-     (begin
-      (undo-push)
-      (set! G (graph (graph-vertices G) (add-child-at-beginning)))
-      (set! Next-id (+ 1 Next-id))
-      (update-open)
-      (update-data)
-      (update-childfuncs child-fun)
-      (go 'down Selected-tree))))
-   
-     (add-child-at-beginning ()
-      (append (list (triple id "has child" Next-id) (triple Next-id "is written" '-)) (graph-edges G)))
-   
-     (update-open ()
-      (for-all-trees
-       (lambda (tree)
-        (set-whole-tree-open! tree (set-union (whole-tree-open tree) (set (whole-tree-selection Selected-tree) (append (whole-tree-selection Selected-tree) (list 0)))))))))))
+  (updater
+   #:graph-changer     (lambda ()
+                        (set! G (graph-prepend-edges G (list (triple id "has child" Next-id) (triple Next-id "is written" '-))))
+                        (set! Next-id (+ 1 Next-id)))
+   #:open-updater      (lambda ()
+                        (for-all-trees
+                         (lambda (tree)
+                          (set-whole-tree-open! tree (set-union (whole-tree-open tree) (set (whole-tree-selection Selected-tree) (append (whole-tree-selection Selected-tree) (list 0))))))))
+   #:selection-updater (lambda ()
+                        (go 'down Selected-tree)))))
+
+
+
+;(define (add-child event)
+; (let* ((id (selected-id Selected-tree))
+;        (is-defined-as (graph-neighborhood-edge-forward G id "is defined as")))
+;  (with
+;   ((if (not (null? is-defined-as))
+;     '()
+;     (begin
+;      (undo-push)
+;      (set! G (graph-prepend-edges G (list (triple id "has child" Next-id) (triple Next-id "is written" '-))))
+;      (set! Next-id (+ 1 Next-id))
+;      (update-open)
+;      (update-data)
+;      (update-childfuncs child-fun)
+;      (go 'down Selected-tree))))
+;   
+;;     (add-child-at-beginning ()
+;;      (append (list (triple id "has child" Next-id) (triple Next-id "is written" '-)) (graph-edges G)))
+;   
+;     (update-open ()
+;      (for-all-trees
+;       (lambda (tree)
+;        (set-whole-tree-open! tree (set-union (whole-tree-open tree) (set (whole-tree-selection Selected-tree) (append (whole-tree-selection Selected-tree) (list 0)))))))))))
 
 (define INSERTTEXT "")
 
@@ -196,12 +245,25 @@
         (has-child (graph-neighborhood-edge-backward G id1 "has child"))
         (is-defined-as-1 (graph-neighborhood-edge-backward G id1 "is defined as"))
         (parent-id1-t (if (not (null? has-child)) (car has-child) (if (not (null? is-defined-as-1)) (car is-defined-as-1) '()))))
-  (cond
-   ((not (null? is-defined-as-2))
-    (set! G (graph (graph-vertices G) (replace parent-id1-t (list (triple (triple-start parent-id1-t) (triple-edge parent-id1-t) id2)) (graph-edges G)))))
-   (#t '())))
- (update-data)
- (update-childfuncs child-fun))
+  (updater
+   #:graph-changer (lambda ()
+                    (cond
+                     ((not (null? is-defined-as-2))
+                      (set! G (graph-replace-edges G parent-id1-t (list (triple (triple-start parent-id1-t) (triple-edge parent-id1-t) id2)))))
+                     (#t '()))))))
+
+
+;(define (link-to id1 id2)
+; (let* ((is-defined-as-2 (graph-neighborhood-edge-forward G id2 "is defined as"))
+;        (has-child (graph-neighborhood-edge-backward G id1 "has child"))
+;        (is-defined-as-1 (graph-neighborhood-edge-backward G id1 "is defined as"))
+;        (parent-id1-t (if (not (null? has-child)) (car has-child) (if (not (null? is-defined-as-1)) (car is-defined-as-1) '()))))
+;  (cond
+;   ((not (null? is-defined-as-2))
+;    (set! G (graph-replace-edges G parent-id1-t (list (triple (triple-start parent-id1-t) (triple-edge parent-id1-t) id2)))))
+;   (#t '())))
+; (update-data)
+; (update-childfuncs child-fun))
 
 (define (search-bound-variables data text)
  (let ((regex (regexp text))
@@ -212,31 +274,55 @@
  (let* ((id (selected-id Selected-tree))
         (is-written (is-written-t id))
         (is-named (graph-neighborhood-edge-forward G id "is named")))
-  (with
-   ((undo-push)
-    (set! G (graph (graph-vertices G)
-                    (if is-written
-                     (set-written)
-                     (if (null? is-named)
-                      (add-name)
-                      (set-name)))))
-    (update-data)
-    (update-childfuncs child-fun))
+  (updater
+   #:graph-changer (lambda ()
+                    (with
+                     ((set! G (if is-written
+                               (set-written)
+                               (if (null? is-named)
+                                (add-name)
+                                (set-name)))))
 
-   (get-insert-text ()
-    (if (char-numeric? (car (string->list (if (eq? "" INSERTTEXT) "-" INSERTTEXT)))) (string->number INSERTTEXT) (string->symbol (if (eq? "" INSERTTEXT) "-" INSERTTEXT))))
+                     (get-insert-text ()
+                      (if (char-numeric? (car (string->list (if (eq? "" INSERTTEXT) "-" INSERTTEXT)))) (string->number INSERTTEXT) (string->symbol (if (eq? "" INSERTTEXT) "-" INSERTTEXT))))
 
-   (set-written ()
-    (replace is-written (list (triple id "is written" (get-insert-text))) (graph-edges G)))
+                     (set-written ()
+                      (graph-replace-edges G is-written (list (triple id "is written" (get-insert-text)))))
 
-   (add-name ()
-    (append (graph-edges G) (list (triple id "is named" (get-insert-text)))))
+                     (add-name ()
+                      (graph-append-edge G (triple id "is named" (get-insert-text))))
 
-   (set-name ()
-    (replace (car is-named) (list (triple id "is named" (get-insert-text))) (graph-edges G))))))
+                     (set-name ()
+                      (graph-replace-edges G (car is-named) (list (triple id "is named" (get-insert-text))))))))))
 
-(define (replace t1 t2s es)
- (append (takef es (negate (curry equal? t1))) t2s (cdr (member t1 es))))
+;(define (write-text-to-graph)
+; (let* ((id (selected-id Selected-tree))
+;        (is-written (is-written-t id))
+;        (is-named (graph-neighborhood-edge-forward G id "is named")))
+;  (with
+;   ((undo-push)
+;    (set! G (if is-written
+;             (set-written)
+;             (if (null? is-named)
+;              (add-name)
+;              (set-name))))
+;    (update-data)
+;    (update-childfuncs child-fun))
+;
+;   (get-insert-text ()
+;    (if (char-numeric? (car (string->list (if (eq? "" INSERTTEXT) "-" INSERTTEXT)))) (string->number INSERTTEXT) (string->symbol (if (eq? "" INSERTTEXT) "-" INSERTTEXT))))
+;
+;   (set-written ()
+;    (graph-replace-edges G is-written (list (triple id "is written" (get-insert-text)))))
+;
+;   (add-name ()
+;    (graph-append-edge G (triple id "is named" (get-insert-text))))
+;
+;   (set-name ()
+;    (graph-replace-edges G (car is-named) (list (triple id "is named" (get-insert-text))))))))
+
+;(define (replace t1 t2s es)
+; (append (takef es (negate (curry equal? t1))) t2s (cdr (member t1 es))))
 
 (define (is-written-t id)
  (let ((nbhd (graph-neighborhood-edge-forward G id "is written")))
@@ -281,35 +367,69 @@
   (make-arg ()
    (let* ((link2 (selected-id Selected-tree))
           (parent-link2 (selected-parent-id Selected-tree))
-          (has-child (member (triple parent-link2 "has child" link2) (graph-edges G)))
+          (has-child (member (triple parent-link2 "has child" link2) (graph-neighborhood-forward G parent-link2)))
           (parent-link2-t (if has-child (car has-child) '()))
           (is-defined-as (graph-neighborhood-edge-forward G link2 "is defined as"))
           (arg-id Next-id))
-    (with
-     ((undo-push)
-      (set! Next-id (+ 1 Next-id))
-      (add-arg-to-hijito)
-      (add-arg-to-call)
-      (convert-var-to-arg)
-      (update-data)
-      (update-childfuncs child-fun)
-      (exit-argify-mode))
+    (updater
+     #:graph-changer     (lambda ()
+                          (with
+                           ((set! Next-id (+ 1 Next-id))
+                            (add-arg-to-hijito)
+                            (add-arg-to-call)
+                            (convert-var-to-arg))
+                  
+                           (add-arg-to-hijito ()
+                            (set! G (graph-append-edges G (list (triple LINK1 "has formal arg" arg-id) (triple arg-id "is written" 'arger) (triple arg-id "is reified as" (string->symbol (format "a~s" arg-id)))))))
+                  
+                           (add-arg-to-call ()
+                            (let ((replacement (if (null? is-defined-as) link2 (triple-end (car is-defined-as)))))
+                             (set! G (graph-append-edge G (triple LINK1PARENT "has child" replacement)))))
+                  
+                           (convert-var-to-arg ()
+                            (set! G ((if (null? is-defined-as) swap-normal swap-var))))
+                  
+                           (swap-normal ()
+                            (graph-replace-edges G parent-link2-t (list (triple parent-link2 (triple-edge parent-link2-t) arg-id))))
+                  
+                           (swap-var ()
+                            (graph-replace-edges G (car is-defined-as) (list (triple link2 "is defined as" arg-id))))))
+     #:selection-updater (lambda ()
+                          (exit-argify-mode)))))))
 
-     (add-arg-to-hijito ()
-      (set! G (graph (graph-vertices G) (append (graph-edges G) (list (triple LINK1 "has formal arg" arg-id) (triple arg-id "is written" 'arger) (triple arg-id "is reified as" (string->symbol (format "a~s" arg-id))))))))
 
-     (add-arg-to-call ()
-      (let ((replacement (if (null? is-defined-as) link2 (triple-end (car is-defined-as)))))
-       (set! G (graph (graph-vertices G) (append (graph-edges G) (list (triple LINK1PARENT "has child" replacement)))))))
-
-     (convert-var-to-arg ()
-      (set! G (graph (graph-vertices G) ((if (null? is-defined-as) swap-normal swap-var) LINK1 (graph-edges G)))))
-
-     (swap-normal (in-id res)
-      (replace parent-link2-t (list (triple parent-link2 (triple-edge parent-link2-t) arg-id)) (graph-edges G)))
-
-     (swap-var (in-id res)
-      (replace (car is-defined-as) (list (triple link2 "is defined as" arg-id)) (graph-edges G))))))))
+;  (make-arg ()
+;   (let* ((link2 (selected-id Selected-tree))
+;          (parent-link2 (selected-parent-id Selected-tree))
+;          (has-child (member (triple parent-link2 "has child" link2) (graph-neighborhood-forward G parent-link2)))
+;          (parent-link2-t (if has-child (car has-child) '()))
+;          (is-defined-as (graph-neighborhood-edge-forward G link2 "is defined as"))
+;          (arg-id Next-id))
+;    (with
+;     ((undo-push)
+;      (set! Next-id (+ 1 Next-id))
+;      (add-arg-to-hijito)
+;      (add-arg-to-call)
+;      (convert-var-to-arg)
+;      (update-data)
+;      (update-childfuncs child-fun)
+;      (exit-argify-mode))
+;
+;     (add-arg-to-hijito ()
+;      (set! G (graph-append-edges G (list (triple LINK1 "has formal arg" arg-id) (triple arg-id "is written" 'arger) (triple arg-id "is reified as" (string->symbol (format "a~s" arg-id)))))))
+;
+;     (add-arg-to-call ()
+;      (let ((replacement (if (null? is-defined-as) link2 (triple-end (car is-defined-as)))))
+;       (set! G (graph-append-edge G (triple LINK1PARENT "has child" replacement)))))
+;
+;     (convert-var-to-arg ()
+;      (set! G ((if (null? is-defined-as) swap-normal swap-var))))
+;
+;     (swap-normal ()
+;      (graph-replace-edges G parent-link2-t (list (triple parent-link2 (triple-edge parent-link2-t) arg-id))))
+;
+;     (swap-var ()
+;      (graph-replace-edges G (car is-defined-as) (list (triple link2 "is defined as" arg-id)))))))))
 
 (define (set-scope event)
  (set! LINK1 (selected-id Selected-tree))
@@ -330,18 +450,15 @@
 
   (make-scope ()
    (let* ((link2 (selected-id Selected-tree)))
-    (with
-     ((undo-push)
-      (swap-scope)
-      (update-data)
-      (update-childfuncs child-fun)
-      (exit-scope-mode))
+    (updater
+     #:graph-changer     (lambda ()
+                          (let ((has-env (graph-neighborhood-edge-forward G LINK1 "has env")))
+                           (if (not (null? has-env))
+                            (set! G (graph-replace-edges G (car has-env) (list (triple LINK1 "has env" link2))))
+                            '())))
+     #:selection-updater (lambda ()
+                          (exit-scope-mode)))))))
 
-     (swap-scope ()
-      (let ((has-env (graph-neighborhood-edge-forward G LINK1 "has env")))
-       (if (not (null? has-env))
-        (set! G (graph (graph-vertices G) (replace (car has-env) (list (triple LINK1 "has env" link2)) (graph-edges G))))
-        '()))))))))
 
 (define (add-var event)
  (set! LINK1 (selected-id Selected-tree))
@@ -364,37 +481,38 @@
   (make-var ()
    (let* ((link2 (selected-id Selected-tree))
           (parent-link2 (selected-parent-id Selected-tree))
-          (has-child1 (member (triple LINK1PARENT "has child" LINK1) (graph-edges G)))
+          (has-child1 (member (triple LINK1PARENT "has child" LINK1) (graph-neighborhood-forward G LINK1PARENT)))
           (parent-link1-t (if has-child1 (car has-child1) '()))
-          (has-child2 (member (triple parent-link2 "has child" link2) (graph-edges G)))
+          (has-child2 (member (triple parent-link2 "has child" link2) (graph-neighborhood-forward G parent-link2)))
           (parent-link2-t (if has-child2 (car has-child2) '())))
-    (with
-     ((undo-push)
-      (if (has-definition?)
-       (swap-child)
-       (interlocute-and-swap))
-      (update-data)
-      (update-childfuncs child-fun)
-      (exit-var-mode))
+    (updater
+     #:graph-changer     (lambda ()
+                          (with
+                           ((if (has-definition?)
+                             (swap-child)
+                             (interlocute-and-swap)))
 
-     (has-definition? ()
-      (not (null? (graph-neighborhood-edge-forward G link2 "is defined as"))))
+                           (has-definition? ()
+                            (not (null? (graph-neighborhood-edge-forward G link2 "is defined as"))))
+                      
+                           (swap-child ()
+                            (set! G (graph-replace-edges G parent-link1-t (list (triple LINK1PARENT (triple-edge parent-link1-t) link2))))
+                            (let ((has-env (car (graph-neighborhood-edge-forward G link2 "has env"))))
+                             (set! G (graph-replace-edges G has-env (list (triple link2 "has env" (common-ancestor link2 (triple-end has-env))))))))
+                      
+                           (interlocute-and-swap ()
+                            (for-all-trees
+                             (lambda (tree)
+                              (set-whole-tree-selection! tree (adjust-laddr-interlocutor link2 (last (whole-tree-selection Selected-tree)) (whole-tree-utterance-tree tree) (whole-tree-selection tree)))
+                              (set-whole-tree-open! tree (adjust-laddr-interlocute link2 (last (whole-tree-selection Selected-tree)) tree))))
+                            (set-whole-tree-selection! Selected-tree LINK1ADDR)
+                            (set! G (graph-replace-edges parent-link2-t (list (triple parent-link2 (triple-edge parent-link2-t) Next-id) (triple Next-id "is defined as" link2) (triple Next-id "has env" (common-ancestor LINK1 link2)))))
+                            (set! G (graph-replace-edges parent-link1-t (list (triple LINK1PARENT (triple-edge parent-link1-t) Next-id))))
+                            (set! Next-id (+ 1 Next-id)))))
 
-     (swap-child ()
-      (set! G (graph (graph-vertices G) (replace parent-link1-t (list (triple LINK1PARENT (triple-edge parent-link1-t) link2)) (graph-edges G))))
-      (let ((has-env (car (graph-neighborhood-edge-forward G link2 "has env"))))
-       (display has-env) (newline)
-       (set! G (graph (graph-vertices G) (replace has-env (list (triple link2 "has env" (common-ancestor link2 (triple-end has-env)))) (graph-edges G))))))
+     #:selection-changer (lambda ()
+                          (exit-var-mode)))))))
 
-     (interlocute-and-swap ()
-      (for-all-trees
-       (lambda (tree)
-        (set-whole-tree-selection! tree (adjust-laddr-interlocutor link2 (last (whole-tree-selection Selected-tree)) (whole-tree-utterance-tree tree) (whole-tree-selection tree)))
-        (set-whole-tree-open! tree (adjust-laddr-interlocute link2 (last (whole-tree-selection Selected-tree)) tree))))
-      (set-whole-tree-selection! Selected-tree LINK1ADDR)
-      (set! G (graph (graph-vertices G) (replace parent-link2-t (list (triple parent-link2 (triple-edge parent-link2-t) Next-id) (triple Next-id "is defined as" link2) (triple Next-id "has env" (common-ancestor LINK1 link2))) (graph-edges G))))
-      (set! G (graph (graph-vertices G) (replace parent-link1-t (list (triple LINK1PARENT (triple-edge parent-link1-t) Next-id)) (graph-edges G))))
-      (set! Next-id (+ 1 Next-id))))))))
 
 (define (common-ancestor id1 id2)
  (with
@@ -418,20 +536,22 @@
 (define (interlocute-lambda function? event)
  (let* ((id (selected-id Selected-tree))
         (parent-id (selected-parent-id Selected-tree))
-        (has-child (member (triple parent-id "has child" id) (graph-edges G)))
+        (has-child (member (triple parent-id "has child" id) (graph-neighborhood-forward G parent-id)))
         (parent-link-t (if has-child (car has-child) '())))
-  (undo-push)
-  (for-all-trees
-   (lambda (tree)
-    (set-whole-tree-open! tree (adjust-laddr-interlocute id (last (whole-tree-selection Selected-tree)) tree))))
-  (set! G (graph (graph-vertices G) (replace parent-link-t
-                                             (if function?
-                                              (list (triple parent-id (triple-edge parent-link-t) Next-id) (triple Next-id "is defined as" id) (triple Next-id "has env" parent-id) (triple Next-id "is function" id))
-                                              (list (triple parent-id (triple-edge parent-link-t) Next-id) (triple Next-id "is defined as" id) (triple Next-id "has env" parent-id)))
-                                             (graph-edges G))))
-  (set! Next-id (+ 1 Next-id))
-  (update-data)
-  (update-childfuncs child-fun)))
+  (updater
+   #:graph-changer (lambda ()
+                    (set! G (graph-replace-edges G parent-link-t
+                                                 (if function?
+                                                  (list (triple parent-id (triple-edge parent-link-t) Next-id))
+                                                  (list (triple parent-id (triple-edge parent-link-t) Next-id)))))
+                    (set! G (graph-append-edges G (if function?
+                                                   (list (triple Next-id "is defined as" id) (triple Next-id "has env" parent-id))
+                                                   (list (triple Next-id "is defined as" id) (triple Next-id "has env" parent-id) (triple Next-id "is function" id)))))
+                    (set! Next-id (+ 1 Next-id)))
+   #:open-updater  (lambda ()
+                    (for-all-trees
+                     (lambda (tree)
+                      (set-whole-tree-open! tree (adjust-laddr-interlocute id (last (whole-tree-selection Selected-tree)) tree))))))))
 
 (define (adjust-laddr-interlocute id pos tree)
  (with
@@ -449,23 +569,25 @@
  (if (null? laddr)
   '()
   (if (and (= (car laddr) pos) (eq? id (car (node-data (utterance-node (list-ref (utterance-args u) pos))))))
-   (begin (display laddr) (newline) (cons (car laddr) (cons 0 (adjust-laddr-interlocutor id pos (list-ref (utterance-args u) (car laddr)) (cdr laddr)))))
+   (cons (car laddr) (cons 0 (adjust-laddr-interlocutor id pos (list-ref (utterance-args u) (car laddr)) (cdr laddr))))
    (cons (car laddr) (adjust-laddr-interlocutor id pos (list-ref (utterance-args u) (car laddr)) (cdr laddr))))))
 
 (define (delete-link event)
  (let* ((id (selected-id Selected-tree))
         (parent-id (selected-parent-id Selected-tree))
-        (child (member (triple parent-id "has child" id) (graph-edges G))))
+        (child (member (triple parent-id "has child" id) (graph-neighborhood-forward G parent-id))))
   (with
    ((if (not child)
      '()
-     (begin
-      (undo-push)
-      (update-open)
-      (update-selection)
-      (remove-child)
-      (update-data)
-      (update-childfuncs child-fun))))
+     (updater
+      #:graph-changer (lambda ()
+                       (cond
+                         (child
+                           (set! G (graph-remove-edge G (car child))))
+                         (#t '())))
+      #:open-updater  (lambda ()
+                       (update-open)
+                       (update-selection)))))
 
    (update-selection ()
     (let ((laddr (whole-tree-selection Selected-tree)))
@@ -497,13 +619,7 @@
           (set-remove (list->set (set-map (whole-tree-open tree) (curry remove-laddr-del-aux id (last (whole-tree-selection Selected-tree)) (whole-tree-utterance-tree tree)))) '())))
  
        (adjust-laddrs ()
-        (curry adjust-laddr-del id (last (whole-tree-selection Selected-tree)) (whole-tree-utterance-tree tree)))))))
-
-   (remove-child ()
-    (cond
-     (child
-      (set! G (graph (graph-vertices G) (remove (car child) (graph-edges G)))))
-     (#t '()))))))
+        (curry adjust-laddr-del id (last (whole-tree-selection Selected-tree)) (whole-tree-utterance-tree tree))))))))))
 
 (define (adjust-laddr-del id pos u laddr)
  (if (null? laddr)
@@ -520,7 +636,7 @@
   '()
   (begin
   (if (and (= (car laddr) pos) (eq? id (car (node-data (utterance-node (list-ref (utterance-args u) pos))))))
-   (begin (display whole-laddr) (newline) whole-laddr)
+   whole-laddr
    (remove-laddr-del id pos (list-ref (utterance-args u) (car laddr)) (cdr laddr) whole-laddr)))))
 
 (define (reify-code event) (display (reify G 0 #f)) (newline))
@@ -608,9 +724,11 @@
    (send Thecanvas on-paint))))
 
 (define (search-text text)
- (let ((regex (regexp text))
-       (texts (graph-filter G (lambda (t) (or (equal? (triple-edge t) "is written") (equal? (triple-edge t) "is named"))))))
-  (filter (lambda (t) (regexp-match? regex (format "~a" (triple-end t)))) texts)))
+ (let* ((regex (regexp text))
+        (texts (map (lambda (id) (graph-neighborhood-edge-forward G id "is written")) (graph-ids G)))
+        (texts2 (filter (lambda (text) (not (null? text))) texts))
+        (texts3 (map car texts2)))
+  (filter (lambda (t) (regexp-match? regex (format "~a" (triple-end t)))) texts3)))
 
 (add-key-evs (list #\space add-sibling
                    #\( add-child
@@ -634,10 +752,10 @@
                    'search handle-search))
 
 (define (graph->file g)
- (let ((g (graph (graph-vertices g) (replace (car (graph-neighborhood-edge-forward g 'next-id "is")) (list (triple 'next-id "is" Next-id)) (graph-edges g)))))
+ (let ((g (graph-replace-edges (car (graph-neighborhood-edge-forward g 'next-id "is")) (list (triple 'next-id "is" Next-id)))))
   (call-with-output-file GRFILE #:exists 'truncate (lambda (f) (write g f)))))
 
-(display (graph->string G))
+;(display (graph->string G))
 (if NEWCODE
  (graph->file G)
  '())
@@ -778,7 +896,7 @@
         (list 'var '--))
        (list 'unknown 'unknown))))))))
 
-(define (graph-ids g) (remove-duplicates (map triple-start (graph-edges g))))
+(define (graph-ids g) (hash-keys G))
 (define (lexical-parent id)
  (let ((is-defined-as (graph-neighborhood-edge-backward G id "is defined as"))
        (has-child (graph-neighborhood-edge-backward G id "has child"))

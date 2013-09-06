@@ -2,9 +2,9 @@ Copyright Philip Monk, August 2013, All rights reserved.
 
 ==============> Language
 
-A program is a list of triples.
+A program is a directed, labeled, partially ordered graph.
 
-The triples have an ordering.  Although implemented as a total ordering, the only comparisons that should be relied upon are those with the same start and edge values.  The only edges where this is applicable are the "has child", "has arg", and "has formal arg".  All other edges are singletons, i.e. for each start there must be no more than one triple with any given edge.
+The triples have an ordering.  Although implemented as a total ordering, the only comparisons that should be relied upon are those with the same start and edge values.  The ordering of backward edges is not defined.  The only edges where this is applicable are the "has child", "has arg", and "has formal arg".  All other edges are singletons, i.e. for each start there must be no more than one triple with any given edge.
 
 "is" may only be used with start next-id.
 
@@ -50,6 +50,22 @@ ira					Y
 he		x	x	x				x
 if		x	Y	x			x
 is
+
+==============> Language implementation
+
+The program graph is implemented as a hash where each entry has the form (id --> (l1 . l2)) where l1 is a list of the edges starting at id and l2 is a list of the edges ending at id.
+
+graph-neighborhood-{forward,backward} returns {l1,l2}, graph-neighborhood-edge-{forward,backward} returns {l1,l2} filtered for the requested edge.
+
+For all modifications, we must preserve the ordering of each l1.  Right now, l2 is in order of date added, but this should not be depended on.
+
+graph-append-edge{s} returns a new hash with e{s} appended to the l1 associated with (triple-start {(car }e{)}) and added to the l2{s} associated with (triple-end e{s}).
+
+graph-prepend-edge{s} returns a new hash with e{s} prepended to the l1 associated with (triple-start {(car }e{)}) and added to the l2{s} associated with (triple-end e{s}).
+
+graph-replace-edges returns a new hash with es replacing e in the l1 associated with (triple-start e) and e removed from the l2 assoiciated with (triple-end e) and es added to the l2{s} associated with each of (triple-end es).  Note that all es must have the same triple-start.
+
+graph-remove-edge returns a new hash with e removed from the l1 associated with (triple-start e) and the l2 associated with (triple-end e).
 
 ==============> Trees
 
