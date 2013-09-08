@@ -35,11 +35,11 @@
 
 (define Trees (list
                (apply whole-tree 
-                      (let* ((dummy-n (node '(0 'dummy "dummy" '() '() '() '() '()) '() (delay '()) (lambda (_) "t")))
+                      (let* ((dummy-n (node '(0 'dummy "dummy" () () () () ()) '() (delay '()) (lambda (_) "t")))
                              (dummy-utterance (utterance dummy-n 0 0 0 0 0 0 '() (cons '(0 0 0) '(0 0 0)))))
                        (list dummy-n (lambda (a) '()) dummy-utterance (set) '() 0 0 0 0 0 0 1)))
                (apply whole-tree 
-                      (let* ((dummy-n (node '(0 'dummy-bar "dummy bar" '() '() '() '() '()) '() (delay '()) (lambda (_) "r")))
+                      (let* ((dummy-n (node '(0 'dummy-bar "dummy bar" () () () () ()) '() (delay '()) (lambda (_) "r")))
                              (dummy-utterance (utterance dummy-n 0 0 0 0 0 0 '() (cons '(0 0 0) '(0 0 0)))))
                        (list dummy-n (lambda (a) '()) dummy-utterance (set) '() 800 30 (- WIDTH 600) 300 0 0 1)))))
 (define Selected-tree (cadr Trees))
@@ -386,23 +386,7 @@
             (if (< offset start)
              (- (+ offset lenwhole) lenpiece)
              offset)
-            (+ (max offset start) (/ visible-width 2) (- (/ lenpiece 2))))))
-    
-         (draw-rectangle (clr x y w h)
-          (gl-color (/ (car clr) 255) (/ (cadr clr) 255) (/ (caddr clr) 255))
-        
-          (gl-begin 'quads)
-          (gl-vertex x (- y))
-          (gl-vertex (+ x w) (- y))
-          (gl-vertex (+ x w) (- (+ y h)))
-          (gl-vertex x (- (+ y h)))
-          (gl-end))
-    
-         (draw-text (text x y clr tree)
-          (gl-color (/ (car clr) 255) (/ (cadr clr) 255) (/ (caddr clr) 255))
-          (gl-raster-pos (- 1 (whole-tree-offset-x tree)) (- (whole-tree-offset-y tree) 1))
-          (glBitmap 0 0 0 0 (+ x (whole-tree-offset-x tree)) (- (+ y (whole-tree-offset-y tree))) (make-cvector _uint8 1))
-          (ftglRenderFont Font text 65535))))))))
+            (+ (max offset start) (/ visible-width 2) (- (/ lenpiece 2))))))))))))
 
    (define/override (on-event event)
     (if (send event dragging?)
@@ -423,6 +407,26 @@
   
    (super-instantiate () (style '(gl)))))
   ))
+
+(define (draw-rectangle clr x y w h)
+ (gl-color (/ (car clr) 255) (/ (cadr clr) 255) (/ (caddr clr) 255))
+
+ (gl-begin 'quads)
+ (gl-vertex x (- y))
+ (gl-vertex (+ x w) (- y))
+ (gl-vertex (+ x w) (- (+ y h)))
+ (gl-vertex x (- (+ y h)))
+ (gl-end))
+
+(define (draw-text text x y clr (tree '()))
+ (gl-color (/ (car clr) 255) (/ (cadr clr) 255) (/ (caddr clr) 255))
+ (if (null? tree)
+  (begin
+   (glBitmap 0 0 0 0 x y (make-cvector _uint8 1)))
+  (begin
+   (gl-raster-pos (- 1 (whole-tree-offset-x tree)) (- (whole-tree-offset-y tree) 1))
+   (glBitmap 0 0 0 0 (+ x (whole-tree-offset-x tree)) (- (+ y (whole-tree-offset-y tree))) (make-cvector _uint8 1))))
+ (ftglRenderFont Font text 65535))
 
 (define INSERTMODE #f)
 
@@ -544,12 +548,47 @@
    (ftglRenderFont Font (format "~a" t) 65535))
 
   (paint-runtime-vals ()
-   (gl-raster-pos 630 310)
-   (ftglRenderFont Font (format "~a" (length (list-ref (node-data (utterance-node u)) 7))) 65535)
-   (foldl
-    (lambda (val res) (gl-raster-pos 600 res) (ftglRenderFont Font (format "~s" val) 65535) (- res 20))
-    290
-    (list-ref (node-data (utterance-node u)) 7)))
+   (let ((width (foldl
+                 (lambda (u n width)
+                  (let ((text (format "~a" ((node-text-func (utterance-node u)) (utterance-node u)))))
+                   (draw-rectangle '(96 96 0) (if (zero? n) 600 610) (+ -330 (* 20 n)) (box-width text) 20)
+                   (gl-color 1 1 1)
+                   (gl-raster-pos (if (zero? n) 600 610) (- 313 (* 20 n)))
+                   (ftglRenderFont Font text 65535)
+                   (max width (box-width text))))
+                 0
+                 (cons u (utterance-args u))
+                 (build-list (+ 1 (length (utterance-args u))) identity))))
+    (let ((r-vs (list-ref (node-data (utterance-node u)) 7)))
+     (if (null? r-vs)
+      '()
+      (for-each
+       (lambda (r-v n)
+        (gl-raster-pos (+ 610 width (* n 40)) 310)
+        (ftglRenderFont Font (format "~a" (cadr r-v)) 65535)
+        (for-each
+         (lambda (node-id val)
+          (for-each
+           (lambda (i-u m)
+            (if (eq? (car (node-data (utterance-node i-u))) node-id)
+             (begin
+              (gl-raster-pos (+ 610 width (* n 40)) (- 293 (* m 20)))
+              (ftglRenderFont Font (format "~a" val) 65535))
+             '()))
+           (utterance-args u)
+           (build-list (length (utterance-args u)) identity)))
+         (list-ref r-v 3)
+         (list-ref r-v 4)))
+       r-vs
+       (build-list (length r-vs) identity))))))
+
+
+;   (gl-raster-pos 630 310)
+;   (ftglRenderFont Font (format "~a" (length (list-ref (node-data (utterance-node u)) 7))) 65535)
+;   (foldl
+;    (lambda (val res) (gl-raster-pos 600 res) (ftglRenderFont Font (format "~s" val) 65535) (- res 20))
+;    290
+;    (list-ref (node-data (utterance-node u)) 7)))
 
   (set-tree ()
    (set-whole-tree-childfunc! Bar-tree (whole-tree-childfunc Selected-tree))
@@ -789,12 +828,6 @@
 ;(define get-color (lambda (a94 a95) (letrec ((v206 (lambda (a222 a229 a230) (letrec ((v221 a222) (v223 (letrec ((v227 a230) (v228 a229)) (* v227 v228))) (v231 (* v223 (- 1 (abs (- (modulo (* v221 6) 2) 1)))))) (cond ((< v221 (/ 1 6)) (list v223 v231 0)) ((< v221 (/ 2 6)) (list v231 v223 0)) ((< v221 (/ 3 6)) (list 0 v223 v231)) ((< v221 (/ 4 6)) (list 0 v231 v223)) ((< v221 (/ 5 6)) (list v231 0 v223)) ((< v221 (/ 6 6)) (list v223 0 v231)))))) (v35 a95) (v26 a94) (v96 (cons (quote (255 255 255)) (map (curry * 255) (v206 VAR1 1.0 1.0))))) (if (equal? (node-laddr v26) (whole-tree-selection v35)) v96 (letrec ((v110 (cons (quote (255 255 255)) (quote (112 0 112))))) (if (equal? (car (node-data v26)) (car (node-data (utterance-node (whole-tree-selection-u v35))))) v110 (letrec ((v85 (if (null? (node-laddr v26)) 0 (last (node-laddr v26)))) (v188 (cons (quote (255 255 255)) (quote (80 0 0))))) (if (odd? (length (node-laddr v26))) (if (zero? v85) v188 (letrec ((v146 (cons (quote (255 255 255)) (quote (96 32 0)))) (v144 (lambda () -)) (v128 (cons (quote (255 255 255)) (quote (96 0 0))))) (if (odd? v85) v128 v146))) (if (zero? v85) v188 (letrec ((v160 (cons (quote (255 255 255)) (quote (96 72 0)))) (v174 (cons (quote (255 255 255)) (quote (96 96 0))))) (if (odd? v85) v160 v174)))))))))))
 
 (define get-color (lambda (a94 a95) (letrec ((v432 0.6180339887498949) (v354 (lambda (a359 a364) (letrec ((v358 a359)) (- v358 (letrec ((v363 a364)) (* v363 (truncate (/ v358 v363)))))))) (v206 (lambda (a222 a229 a230) (letrec ((v221 a222) (v223 (letrec ((v227 a230) (v228 a229)) (* v227 v228))) (v231 (* v223 (- 1 (abs (- (v354 (* v221 6) 2) 1)))))) (cond ((< v221 (/ 1 6)) (list v223 v231 0)) ((< v221 (/ 2 6)) (list v231 v223 0)) ((< v221 (/ 3 6)) (list 0 v223 v231)) ((< v221 (/ 4 6)) (list 0 v231 v223)) ((< v221 (/ 5 6)) (list v231 0 v223)) ((< v221 (/ 6 6)) (list v223 0 v231)))))) (v35 a95) (v26 a94) (v96 (cons (quote (0 0 0)) (map (curry * 255) (v206 0.15 1.0 1.0))))) (if (equal? (node-laddr v26) (whole-tree-selection v35)) v96 (letrec ((v110 (cons (quote (0 0 0)) (map (curry * 255) (v206 0.15 0.9 0.9))))) (if (equal? (car (node-data v26)) (car (node-data (utterance-node (whole-tree-selection-u v35))))) v110 (letrec ((v450 (lambda () (v354 (* (letrec ((v452 (lambda (a462) (letrec ((v461 a462)) (if (null? v461) 0 (last v461)))))) (v452 (node-laddr v26))) v432) 1))) (v85 (if (null? (node-laddr v26)) 0 (last (node-laddr v26)))) (v188 (cons (quote (255 255 255)) (quote (80 0 0)))) (v373 (cons (quote (255 255 255)) (map (curry * 255) (v206 (v450) 0.8 0.8)))) (v405 (cons (quote (255 255 255)) (map (curry * 255) (v206 (v450) 0.6 0.8))))) (if (odd? (length (node-laddr v26))) v373 v405))))))))
-
-;(define get-color (lambda (a94 a95) (letrec ((v432 0.6180339887498949) (v354 (lambda (a359 a364) (letrec ((v358 a359)) (- v358 (letrec ((v363 a364)) (* v363 (truncate (/ v358 v363)))))))) (v206 (lambda (a222 a229 a230) (letrec ((v221 a222) (v223 (letrec ((v227 a230) (v228 a229)) (* v227 v228))) (v231 (* v223 (- 1 (abs (- (v354 (* v221 6) 2) 1)))))) (cond ((< v221 (/ 1 6)) (list v223 v231 0)) ((< v221 (/ 2 6)) (list v231 v223 0)) ((< v221 (/ 3 6)) (list 0 v223 v231)) ((< v221 (/ 4 6)) (list 0 v231 v223)) ((< v221 (/ 5 6)) (list v231 0 v223)) ((< v221 (/ 6 6)) (list v223 0 v231)))))) (v35 a95) (v26 a94) (v96 (cons (quote (255 255 255)) (map (curry * 255) (v206 VAR1 1.0 1.0))))) (if (equal? (node-laddr v26) (whole-tree-selection v35)) v96 (letrec ((v110 (cons (quote (255 255 255)) (map (curry * 255) (v206 VAR1 0.9 0.9))))) (if (equal? (car (node-data v26)) (car (node-data (utterance-node (whole-tree-selection-u v35))))) v110 (letrec ((v450 (lambda () (v354 (* (letrec ((v452 (lambda (a462) (letrec ((v461 a462)) (if (null? v461) 0 (last v461)))))) (v452 (node-laddr v26))) v432) 1))) (v85 (if (null? (node-laddr v26)) 0 (last (node-laddr v26)))) (v188 (cons (quote (255 255 255)) (quote (80 0 0)))) (v373 (cons (quote (255 255 255)) (map (curry * 255) (v206 (v450) 0.8 0.8)))) (v405 (cons (quote (255 255 255)) (map (curry * 255) (v206 (v450) 0.6 0.8))))) (if (odd? (length (node-laddr v26))) v373 v405))))))))
-
-;(define get-color (lambda (a94 a95) (letrec ((v432 0.6180339887498949) (v354 (lambda (a359 a364) (letrec ((v358 a359)) (- v358 (letrec ((v363 a364)) (* v363 (truncate (/ v358 v363)))))))) (v206 (lambda (a222 a229 a230) (letrec ((v221 a222) (v223 (letrec ((v227 a230) (v228 a229)) (* v227 v228))) (v231 (* v223 (- 1 (abs (- (v354 (* v221 6) 2) 1)))))) (cond ((< v221 (/ 1 6)) (list v223 v231 0)) ((< v221 (/ 2 6)) (list v231 v223 0)) ((< v221 (/ 3 6)) (list 0 v223 v231)) ((< v221 (/ 4 6)) (list 0 v231 v223)) ((< v221 (/ 5 6)) (list v231 0 v223)) ((< v221 (/ 6 6)) (list v223 0 v231)))))) (v35 a95) (v26 a94) (v96 (cons (quote (255 255 255)) (map (curry * 255) (v206 0.0 0.5 1.0))))) (if (equal? (node-laddr v26) (whole-tree-selection v35)) v96 (letrec ((v110 (cons (quote (255 255 255)) (quote (112 0 112))))) (if (equal? (car (node-data v26)) (car (node-data (utterance-node (whole-tree-selection-u v35))))) v110 (letrec ((v450 (lambda () (v354 (* (letrec ((v452 (lambda (a462) (letrec ((v461 a462)) (if (null? v461) 0 (last v461)))))) (v452 (node-laddr v26))) v432) 1))) (v85 (if (null? (node-laddr v26)) 0 (last (node-laddr v26)))) (v188 (cons (quote (255 255 255)) (quote (80 0 0)))) (v373 (cons (quote (255 255 255)) (map (curry * 255) (v206 (v450) 1.0 1.0)))) (v405 (cons (quote (255 255 255)) (map (curry * 255) (v206 (v450) 0.7 1.0))))) (if (odd? (length (node-laddr v26))) v373 v405))))))))
-
-;(define get-color (lambda (a94 a95) (letrec ((v206 (lambda (a222 a229 a230) (letrec ((v221 a222) (v223 (letrec ((v227 a230) (v228 a229)) (* v227 v228))) (v231 (* v223 (- 1 (abs (- (letrec ((v354 (lambda (a359 a364) (letrec ((v358 a359)) (- v358 (letrec ((v363 a364)) (* v363 (truncate (/ v358 v363))))))))) (v354 (* v221 6) 2)) 1)))))) (cond ((< v221 (/ 1 6)) (list v223 v231 0)) ((< v221 (/ 2 6)) (list v231 v223 0)) ((< v221 (/ 3 6)) (list 0 v223 v231)) ((< v221 (/ 4 6)) (list 0 v231 v223)) ((< v221 (/ 5 6)) (list v231 0 v223)) ((< v221 (/ 6 6)) (list v223 0 v231)))))) (v35 a95) (v26 a94) (v96 (cons (quote (255 255 255)) (map (curry * 255) (v206 VAR1 1.0 0.5))))) (if (equal? (node-laddr v26) (whole-tree-selection v35)) v96 (letrec ((v110 (cons (quote (255 255 255)) (quote (112 0 112))))) (if (equal? (car (node-data v26)) (car (node-data (utterance-node (whole-tree-selection-u v35))))) v110 (letrec ((v85 (if (null? (node-laddr v26)) 0 (last (node-laddr v26)))) (v188 (cons (quote (255 255 255)) (quote (80 0 0))))) (if (odd? (length (node-laddr v26))) (if (zero? v85) v188 (letrec ((v146 (cons (quote (255 255 255)) (quote (96 32 0)))) (v144 (lambda () -)) (v128 (cons (quote (255 255 255)) (quote (96 0 0))))) (if (odd? v85) v128 v146))) (if (zero? v85) v188 (letrec ((v160 (cons (quote (255 255 255)) (quote (96 72 0)))) (v174 (cons (quote (255 255 255)) (quote (96 96 0))))) (if (odd? v85) v160 v174)))))))))))
 
 (define h (make-hash))
 

@@ -6,7 +6,7 @@
 (provide Thecanvas Info (all-defined-out) update-childfuncs)
 
 (define FILENAME "extractdata.ss")
-(define GRFILE "datagetcolor")
+(define GRFILE "datafib")
 
 (define NEWCODE #f)
 
@@ -300,8 +300,8 @@
                                                   (list (triple parent-id (triple-edge parent-link-t) Next-id))
                                                   (list (triple parent-id (triple-edge parent-link-t) Next-id)))))
                     (set! G (graph-append-edges G (if function?
-                                                   (list (triple Next-id "is defined as" id) (triple Next-id "has env" parent-id))
-                                                   (list (triple Next-id "is defined as" id) (triple Next-id "has env" parent-id) (triple Next-id "is function" id)))))
+                                                   (list (triple Next-id "is defined as" id) (triple Next-id "has env" parent-id) (triple Next-id "is function" id))
+                                                   (list (triple Next-id "is defined as" id) (triple Next-id "has env" parent-id)))))
                     (set! Next-id (+ 1 Next-id)))
    #:open-updater  (lambda ()
                     (for-all-trees
@@ -428,9 +428,19 @@
                 ((not (null? has-child))
                  (let ((realmeat (map (curry (curryr reify (and tracing? (not (eq? (let ((ress (reify g (triple-end (car has-child)) #f))) (display ress) (newline) ress) 'quote)))) g) (map triple-end has-child))))
                   (if tracing?
-                   `(let ((res ,realmeat))
-                     (hash-set! h ,id (append (hash-ref! h ,id (quote ())) (list res)))
-                     res)
+                   `(begin
+                     (set! stack (cons (quote ,(string->symbol (format "flag~a" id))) stack))
+                     (let ((res ,realmeat)
+                           (childreses '()))
+                      (andmap
+                       (lambda (item) (if (eq? item (quote ,(string->symbol (format "flag~a" id)))) #f (begin (set! childreses (cons item childreses)) #t)))
+                       stack)
+                      (set! h (graph-append-edges h (list (triple ,id 'has-res Next-r) (triple Next-r 'has-val res))))
+                      (set! h (graph-append-edges h (map (curry triple Next-r 'has-roots) childreses)))
+                      (set! stack (drop stack (+ 1 (length childreses))))
+                      (set! stack (cons Next-r stack))
+                      (set! Next-r (- Next-r 1))
+                      res))
                    realmeat)))
                 ((not (null? is-defined-as))
                  (string->symbol (format "v~a" id)))
@@ -452,15 +462,18 @@
                      meat)))
       env)))))
 
-(define runtime-vals (make-hash))
+(define runtime-vals (hash))
 
 (define (run-code event)
  (let ((code (reify G 0 #t))
        (ns (make-base-namespace)))
   (print code) (newline)
-  (eval '(define h (make-hash)) ns)
+  (eval '(require racket "graph.ss") ns)
+  (eval '(define Next-r -1) ns)
+  (eval '(define stack '()) ns)
+  (eval '(define h (hash)) ns)
   (eval code ns)
-  (displayln (eval 'h ns))
+;  (displayln (eval 'h ns))
   (set! runtime-vals (eval 'h ns))
   (update-data)
   (update-childfuncs child-fun)))
@@ -536,7 +549,7 @@
    (#t '()))))
 
 (define (graph->file g)
- (let ((g (graph-replace-edges (car (graph-neighborhood-edge-forward g 'next-id "is")) (list (triple 'next-id "is" Next-id)))))
+ (let ((g (graph-replace-edges G (car (graph-neighborhood-edge-forward g 'next-id "is")) (list (triple 'next-id "is" Next-id)))))
   (call-with-output-file GRFILE #:exists 'truncate (lambda (f) (write g f)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -658,9 +671,33 @@
     (cons parent (cadr (get-written parent)))))
   
   (runtime-values ()
-   (if (hash-has-key? runtime-vals id)
-    (hash-ref runtime-vals id)
-    '()))))
+   (let* ((reses (map
+                  (curry triple-end)
+                  (graph-neighborhood-edge-forward runtime-vals id 'has-res)))
+          (vals (map
+                 (compose (curry map triple-end) (curryr (curry graph-neighborhood-edge-forward runtime-vals) 'has-val))
+                 reses)))
+    (map
+     (lambda (res val)
+      (let* ((root-reses (map triple-end (graph-neighborhood-edge-forward runtime-vals res 'has-roots)))
+             (root-nodes (map
+                          (compose (curry triple-start) safe-car (curryr (curry graph-neighborhood-edge-backward runtime-vals) 'has-res))
+                          root-reses))
+             (root-vals (map
+                         (compose (curry triple-end) safe-car (curryr (curry graph-neighborhood-edge-forward runtime-vals) 'has-val))
+                         root-reses)))
+       (cons res (cons val (cons root-reses (cons root-nodes (cons root-vals '())))))))
+      reses
+      vals)))))
+
+(define (safe-car l)
+ (if (null? l)
+  '()
+  (car l)))
+
+;   (if (hash-has-key? runtime-vals id)
+;    (hash-ref runtime-vals id)
+;    '()))))
 
 (define (get-written id)
  (let ((is-func (is-func-t id))
