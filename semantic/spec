@@ -1,6 +1,7 @@
 Copyright Philip Monk, August 2013, All rights reserved.
 
-==============> Language
+Language
+========
 
 A program is a directed, labeled, partially ordered graph.
 
@@ -51,7 +52,8 @@ he		x	x	x				x
 if		x	Y	x			x
 is
 
-==============> Language implementation
+Language implementation
+=======================
 
 The program graph is implemented as a hash where each entry has the form (id --> (l1 . l2)) where l1 is a list of the edges starting at id and l2 is a list of the edges ending at id.
 
@@ -67,21 +69,25 @@ graph-replace-edges returns a new hash with es replacing e in the l1 associated 
 
 graph-remove-edge returns a new hash with e removed from the l1 associated with (triple-start e) and the l2 associated with (triple-end e).
 
-==============> Trees
+Trees
+=====
 
 Trees is a list of whole-tree.
 
 The first element of Trees must be a dummy tree, the second element must be the Bar-tree, and there must always be a third element.  The contents of the dummy tree should never have a functional impact.
 
-==============> Selected-tree
+Selected-tree
+=============
 
 Selected-tree must always point to a valid tree.
 
-==============> Bar-tree
+Bar-tree
+========
 
 Bar-tree must always point to a valid tree.
 
-==============> whole-tree
+whole-tree
+==========
 
 A whole-tree contains all the data necessary to display a tree on the screen.
 
@@ -97,7 +103,8 @@ selection is a laddr.  selection must correspond to a valid utterance.
 
 x y w h offset-x offset-y zoom are numbers.  zoom must be positive.
 
-==============> utterance
+utterance
+=========
 
 An utterance contains all the data necessary to display a single node.
 
@@ -109,6 +116,21 @@ args is an eargerly-evaluated list of utterances.  An utterance may not be its o
 
 clr is a pair of the form (f . b) where f is a foreground color and b is a background color.  Both f and b are lists of length three representing rgb on a scale of 0-255.
 
-==============> runtime-vals
+runtime-vals
+============
 
 runtime-vals is a mutable hash from ids to a list of values.  The order of the values is such that as soon as a value for a particular id is known, it is added to the end.  Thus, it is in order of _exits_, not _entrances_ into a node.  If we want to change that, then we'd need to come up with a way to put in placeholders as we're stepping through and at the end replace them with the value.  This is very doable, I'm just not sure if it's the correct design decision.
+
+visualization
+=============
+
+A visualization must implement the following functions:
+
+* paint-tree
+* node->v11n-utterance
+* go {'left,'right,'up,'down}
+* find-utterance
+
+A visualization may implement the following functions:
+
+* zoom

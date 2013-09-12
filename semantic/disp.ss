@@ -25,28 +25,13 @@
 
 (struct node (data laddr prom-args text-func) #:transparent)
 (struct utterance (node x y w h text-w text-h args clr) #:transparent)
-(struct whole-tree (n-tree childfunc utterance-tree open selection x y w h offset-x offset-y zoom) #:mutable)
+(struct whole-tree (n-tree childfunc utterance-tree open selection x y w h v11n offset-x offset-y zoom) #:mutable)
 
 (define (whole-tree-selection-u tree)
  (find-utterance-from-laddr-safe (whole-tree-utterance-tree tree) (whole-tree-selection tree)))
 
 (define WIDTH (* 1 1600))
 (define HEIGHT 899)
-
-(define Trees (list
-               (apply whole-tree 
-                      (let* ((dummy-n (node '(0 'dummy "dummy" () () () () ()) '() (delay '()) (lambda (_) "t")))
-                             (dummy-utterance (utterance dummy-n 0 0 0 0 0 0 '() (cons '(0 0 0) '(0 0 0)))))
-                       (list dummy-n (lambda (a) '()) dummy-utterance (set) '() 0 0 0 0 0 0 1)))
-               (apply whole-tree 
-                      (let* ((dummy-n (node '(0 'dummy-bar "dummy bar" () () () () ()) '() (delay '()) (lambda (_) "r")))
-                             (dummy-utterance (utterance dummy-n 0 0 0 0 0 0 '() (cons '(0 0 0) '(0 0 0)))))
-                       (list dummy-n (lambda (a) '()) dummy-utterance (set) '() 800 30 (- WIDTH 600) 300 0 0 1)))))
-(define Selected-tree (cadr Trees))
-(define Bar-tree (cadr Trees))
-
-(define (for-all-trees f)
- (for-each f (cdr Trees)))
 
 (define VAR1 0)
 (define VAR2 0)
@@ -90,6 +75,418 @@
 (define closed? (negate open?))
 (define node-args (compose force node-prom-args))
 
+(struct v11n (paint-tree node->v11n-utterance find-utterance wheel))
+(define default-v11n (v11n
+                      (lambda (tree)
+                       (with
+                        ((apply gl-scissor (whole-tree-dim tree))
+                         (apply gl-viewport (whole-tree-dim tree))
+                         (gl-matrix-mode 'projection)
+                         (gl-load-identity)
+                         (gl-ortho
+                          (- (whole-tree-offset-x tree))
+                          (+ (- (whole-tree-offset-x tree)) (/ (whole-tree-w tree) (whole-tree-zoom tree)))
+                          (+ (whole-tree-offset-y tree) (- (/ (whole-tree-h tree) (whole-tree-zoom tree))))
+                          (whole-tree-offset-y tree)
+                          -1.0
+                          1.0)
+                         (gl-matrix-mode 'modelview)
+                         (gl-load-identity)
+                         (utterance-paint (whole-tree-utterance-tree tree) tree))
+                  
+                        (utterance-paint (u tree)
+                         (with
+                          ((let* ((text ((node-text-func (utterance-node u)) (utterance-node u)))
+                                  (x (utterance-x u))
+                                  (y (utterance-y u))
+                                  (w (utterance-w u))
+                                  (h (utterance-h u))
+                                  (text-w (utterance-text-w u))
+                                  (text-h (utterance-text-h u))
+                                  (args (utterance-args u))
+                                  (clr (utterance-clr u)))
+                            (if (invisible? x y w h tree)
+                             '()
+                             (begin
+                              (draw-rectangle (if (eq? Selected-tree tree) (cdr clr) (map (curryr / 3) (cdr clr))) x y w h)
+                              (if (< (whole-tree-zoom tree) 1) '()
+                               (draw-text
+                                text
+                                (* (whole-tree-zoom tree) (center x w (- text-w PADDING) (- (whole-tree-offset-x tree)) (whole-tree-w tree)))
+                                (* (whole-tree-zoom tree) (+ text-h -3 (center y h text-h (- (whole-tree-offset-y tree)) (whole-tree-h tree))))
+                                (car clr)
+                                tree))
+                              (for-each (lambda (arg) (utterance-paint arg tree)) args)))))
+                  
+                         (invisible? (x y w h tree)
+                          (or
+                           (and (< (+ x w) (- (whole-tree-offset-x tree))) (not VERTICAL))
+                           (and (< (+ y h) (- (whole-tree-offset-y tree))) VERTICAL)
+                           (> x (- (/ (whole-tree-w tree) (whole-tree-zoom tree)) (whole-tree-offset-x tree)))
+                           (> y (- (/ (whole-tree-h tree) (whole-tree-zoom tree)) (whole-tree-offset-y tree)))))
+                    
+                         (center (offset lenwhole lenpiece start width)
+                          (let ((visible-width (- (min (+ offset lenwhole) (+ start width)) (max offset start))))
+                           (if (< visible-width lenpiece)
+                            (if (< offset start)
+                             (- (+ offset lenwhole) lenpiece)
+                             offset)
+                            (+ (max offset start) (/ visible-width 2) (- (/ lenpiece 2))))))))))
+
+                      (lambda (n x y w row siblings tree)
+                       (let node->utterance ((n n) (x x) (y y) (w w) (row row) (siblings siblings) (tree tree))
+                        (with
+                         ((let ((children 
+                                 (if (closed? n tree)
+                                  '()
+                                  (let ((child-w (if VERTICAL (foldl max 0 (map (lambda (arg) (node-width arg tree)) (node-args n))) -1)))
+                                   (caddr
+                                    (foldl
+                                     (lambda (arg data)
+                                      (let ((res (node->utterance
+                                                  arg
+                                                  (if VERTICAL (+ (car data) w) (car data))
+                                                  (if VERTICAL (cadr data) (+ (cadr data) (node-height arg tree)))
+                                                  child-w
+                                                  (+ 1 row)
+                                                  (- (length (node-args n)) 1)
+                                                  tree)))
+                                       (list
+                                        (if VERTICAL (car data) (+ (car data) (utterance-w res)))
+                                        (if VERTICAL (+ (cadr data) (node-height arg tree)) (cadr data))
+                                        (if (null? res)
+                                         (caddr data)
+                                         (append
+                                          (caddr data)
+                                          (list res))))))
+                                     (list x y '())
+                                     (node-args n)))))))
+                           (utterance
+                            n
+                            x
+                            y
+                            (if VERTICAL w (max (box-width ((node-text-func n) n)) (apply + (map utterance-w children))))
+                            (node-height n tree)
+                            (box-width ((node-text-func n) n))
+                            (box-height ((node-text-func n) n))
+                            children
+                            (get-color n tree)))))))
+
+                      (lambda (root x y tree)
+                       (let find-utterance ((root root) (x x) (y y) (tree tree))
+                        (with
+                         ((if (or
+                               (above-bottom-of-utterance?)
+                               (utterance-is-closed?)
+                               (has-no-children?)
+                               (is-to-the-right-of-utterance?))
+                           root
+                           (pass-on-to-child)))
+                       
+                         (above-bottom-of-utterance? ()
+                          (< (min-dim x y) (+ (utterance-min-dim root) (utterance-min-dim-span root))))
+                       
+                         (utterance-is-closed? ()
+                          (closed? (utterance-node root) tree))
+                               
+                         (has-no-children? ()
+                          (null? (node-args (utterance-node root))))
+                       
+                         (is-to-the-right-of-utterance? ()
+                          (>= (maj-dim x y) (let ((baby (last (utterance-args root)))) (+ (utterance-maj-dim baby) (utterance-maj-dim-span baby)))))
+                       
+                         (pass-on-to-child ()
+                          (ormap
+                           (lambda (child)
+                            (if (< (maj-dim x y) (+ (utterance-maj-dim child) (utterance-maj-dim-span child)))
+                             (find-utterance child x y tree)
+                             #f))
+                           (utterance-args root))))))
+
+                      (lambda (dir event)
+                       (cond
+                        ((eq? dir 'up)
+                         (set-whole-tree-offset-x! Selected-tree (+ SCROLLDIST (whole-tree-offset-x Selected-tree))))
+                        ((eq? dir 'down)
+                         (set-whole-tree-offset-x! Selected-tree (+ (- SCROLLDIST) (whole-tree-offset-x Selected-tree))))
+                        ((eq? dir 'left)
+                         (set-whole-tree-offset-y! Selected-tree (+ SCROLLDIST (whole-tree-offset-y Selected-tree))))
+                        ((eq? dir 'right)
+                         (set-whole-tree-offset-y! Selected-tree (+ (- SCROLLDIST) (whole-tree-offset-y Selected-tree))))))))
+
+(struct other-v11n-utterance utterance (total-height))
+
+(define other-v11n (v11n
+                      (lambda (tree)
+                       (with
+                        ((apply gl-scissor (whole-tree-dim tree))
+                         (apply gl-viewport (whole-tree-dim tree))
+                         (gl-matrix-mode 'projection)
+                         (gl-load-identity)
+                         (gl-ortho
+                          (- (whole-tree-offset-x tree))
+                          (+ (- (whole-tree-offset-x tree)) (/ (whole-tree-w tree) (whole-tree-zoom tree)))
+                          (+ (whole-tree-offset-y tree) (- (/ (whole-tree-h tree) (whole-tree-zoom tree))))
+                          (whole-tree-offset-y tree)
+                          -1.0
+                          1.0)
+                         (gl-matrix-mode 'modelview)
+                         (gl-load-identity)
+                         (utterance-paint (whole-tree-utterance-tree tree) tree))
+                  
+                        (utterance-paint (u tree)
+                         (with
+                          ((let* ((text ((node-text-func (utterance-node u)) (utterance-node u)))
+                                  (x (utterance-x u))
+                                  (y (utterance-y u))
+                                  (w (utterance-w u))
+                                  (h (utterance-h u))
+                                  (text-w (utterance-text-w u))
+                                  (text-h (utterance-text-h u))
+                                  (args (utterance-args u))
+                                  (clr (utterance-clr u)))
+                            (if (invisible? x y w h tree)
+                             '()
+                             (begin
+                              (draw-rectangle (if (eq? Selected-tree tree) (cdr clr) (map (curryr / 3) (cdr clr))) x y w h)
+                              (if (< (whole-tree-zoom tree) 1) '()
+                               (draw-text
+                                text
+                                (* (whole-tree-zoom tree) (center x w (- text-w PADDING) (- (whole-tree-offset-x tree)) (whole-tree-w tree)))
+                                (* (whole-tree-zoom tree) (+ text-h -3 (center y h text-h (- (whole-tree-offset-y tree)) (whole-tree-h tree))))
+                                (car clr)
+                                tree))
+                              (for-each (lambda (arg) (utterance-paint arg tree)) args)))))
+                  
+                         (invisible? (x y w h tree)
+                          (or
+                           (and (< (+ x w) (- (whole-tree-offset-x tree))) (not VERTICAL))
+                           (and (< (+ y h) (- (whole-tree-offset-y tree))) VERTICAL)
+                           (> x (- (/ (whole-tree-w tree) (whole-tree-zoom tree)) (whole-tree-offset-x tree)))
+                           (> y (- (/ (whole-tree-h tree) (whole-tree-zoom tree)) (whole-tree-offset-y tree)))))
+                    
+                         (center (offset lenwhole lenpiece start width)
+                          (let ((visible-width (- (min (+ offset lenwhole) (+ start width)) (max offset start))))
+                           (if (< visible-width lenpiece)
+                            (if (< offset start)
+                             (- (+ offset lenwhole) lenpiece)
+                             offset)
+                            (+ (max offset start) (/ visible-width 2) (- (/ lenpiece 2))))))))))
+
+                      (lambda (n x y w row siblings tree)
+                       (let node->utterance ((n n) (x x) (y y) (row row) (siblings siblings) (tree tree))
+                        (let ((children 
+                               (if (closed? n tree)
+                                '()
+                                (cadr
+                                 (foldl
+                                  (lambda (arg data)
+                                   (let ((res (node->utterance
+                                               arg
+                                               (+ x 10)
+                                               (car data)
+                                               (+ 1 row)
+                                               (- (length (node-args n)) 1)
+                                               tree)))
+                                    (if (null? res)
+                                     (list
+                                      0
+                                      (cadr data))
+                                     (list
+                                      (+ (car data) (other-v11n-utterance-total-height res))
+                                      (append
+                                       (cadr data)
+                                       (list res))))))
+                                  (list (+ y (node-height n tree)) '())
+                                  (node-args n))))))
+                         (other-v11n-utterance
+                          n
+                          x
+                          y
+                          (box-width ((node-text-func n) n))
+;                          (max (box-width ((node-text-func n) n)) (apply + (map utterance-w children)))
+;                          (foldl + (node-height n tree) (map utterance-h children))
+                          (node-height n tree)
+                          (box-width ((node-text-func n) n))
+                          (box-height ((node-text-func n) n))
+                          children
+                          (get-color n tree)
+                          (foldl + (node-height n tree) (map other-v11n-utterance-total-height children))))))
+
+                      (lambda (root x y tree)
+                       (let find-utterance ((root root) (x x) (y y))
+                        (with
+                         ((if (or
+                               (< y (+ (utterance-y root) (utterance-h root)))
+                               (> y (+ (utterance-y root) (other-v11n-utterance-total-height root))))
+                           root
+                           (ormap
+                            (lambda (child)
+                             (if (< y (+ (utterance-y child) (other-v11n-utterance-total-height child)))
+                              (find-utterance child x y)
+                              #f))
+                            (utterance-args root)))))))
+
+                      (lambda (dir event)
+                       (cond
+                        ((eq? dir 'up)
+                         (set-whole-tree-offset-y! Selected-tree (+ SCROLLDIST (whole-tree-offset-y Selected-tree))))
+                        ((eq? dir 'down)
+                         (set-whole-tree-offset-y! Selected-tree (+ (- SCROLLDIST) (whole-tree-offset-y Selected-tree))))
+                        ((eq? dir 'left)
+                         (set-whole-tree-offset-x! Selected-tree (+ (- SCROLLDIST) (whole-tree-offset-x Selected-tree))))
+                        ((eq? dir 'right)
+                         (set-whole-tree-offset-x! Selected-tree (+ SCROLLDIST (whole-tree-offset-x Selected-tree))))))))
+
+(define other2-v11n (v11n
+                      (lambda (tree)
+                       (with
+                        ((apply gl-scissor (whole-tree-dim tree))
+                         (apply gl-viewport (whole-tree-dim tree))
+                         (gl-matrix-mode 'projection)
+                         (gl-load-identity)
+                         (gl-ortho
+                          (- (whole-tree-offset-x tree))
+                          (+ (- (whole-tree-offset-x tree)) (/ (whole-tree-w tree) (whole-tree-zoom tree)))
+                          (+ (whole-tree-offset-y tree) (- (/ (whole-tree-h tree) (whole-tree-zoom tree))))
+                          (whole-tree-offset-y tree)
+                          -1.0
+                          1.0)
+                         (gl-matrix-mode 'modelview)
+                         (gl-load-identity)
+                         (utterance-paint (whole-tree-utterance-tree tree) tree))
+                  
+                        (utterance-paint (u tree)
+                         (with
+                          ((let* ((text ((node-text-func (utterance-node u)) (utterance-node u)))
+                                  (x (utterance-x u))
+                                  (y (utterance-y u))
+                                  (w (utterance-w u))
+                                  (h (utterance-h u))
+                                  (text-w (utterance-text-w u))
+                                  (text-h (utterance-text-h u))
+                                  (args (utterance-args u))
+                                  (clr (utterance-clr u)))
+                            (if (invisible? x y w h tree)
+                             '()
+                             (begin
+;                              (draw-rectangle (if (eq? Selected-tree tree) (cdr clr) (map (curryr / 3) (cdr clr))) x y w h)
+                              (if (< (whole-tree-zoom tree) 1) '()
+                               (draw-text
+                                (format "(~a" text)
+                                (* (whole-tree-zoom tree) (center x w (- text-w PADDING) (- (whole-tree-offset-x tree)) (whole-tree-w tree)))
+                                (* (whole-tree-zoom tree) (+ text-h -3 (center y h text-h (- (whole-tree-offset-y tree)) (whole-tree-h tree))))
+                                (car clr)
+                                tree))
+                              (for-each (lambda (arg) (utterance-paint arg tree)) args)))))
+                  
+                         (invisible? (x y w h tree)
+                          (or
+                           (and (< (+ x w) (- (whole-tree-offset-x tree))) (not VERTICAL))
+                           (and (< (+ y h) (- (whole-tree-offset-y tree))) VERTICAL)
+                           (> x (- (/ (whole-tree-w tree) (whole-tree-zoom tree)) (whole-tree-offset-x tree)))
+                           (> y (- (/ (whole-tree-h tree) (whole-tree-zoom tree)) (whole-tree-offset-y tree)))))
+                    
+                         (center (offset lenwhole lenpiece start width)
+                          (let ((visible-width (- (min (+ offset lenwhole) (+ start width)) (max offset start))))
+                           (if (< visible-width lenpiece)
+                            (if (< offset start)
+                             (- (+ offset lenwhole) lenpiece)
+                             offset)
+                            (+ (max offset start) (/ visible-width 2) (- (/ lenpiece 2))))))))))
+
+                      (lambda (n x y w row siblings tree)
+                       (let node->utterance ((n n) (x x) (y y) (row row) (siblings siblings) (tree tree))
+                        (let ((children 
+                               (if (closed? n tree)
+                                '()
+                                (cadr
+                                 (foldl
+                                  (lambda (arg data)
+                                   (let ((res (node->utterance
+                                               arg
+                                               (+ x 10)
+                                               (car data)
+                                               (+ 1 row)
+                                               (- (length (node-args n)) 1)
+                                               tree)))
+                                    (if (null? res)
+                                     (list
+                                      0
+                                      (cadr data))
+                                     (list
+                                      (+ (car data) (other-v11n-utterance-total-height res))
+                                      (append
+                                       (cadr data)
+                                       (list res))))))
+                                  (list (+ y (node-height n tree)) '())
+                                  (node-args n))))))
+                         (other-v11n-utterance
+                          n
+                          x
+                          y
+                          (box-width ((node-text-func n) n))
+;                          (max (box-width ((node-text-func n) n)) (apply + (map utterance-w children)))
+;                          (foldl + (node-height n tree) (map utterance-h children))
+                          (node-height n tree)
+                          (box-width ((node-text-func n) n))
+                          (box-height ((node-text-func n) n))
+                          children
+                          (get-color n tree)
+                          (foldl + (node-height n tree) (map other-v11n-utterance-total-height children))))))
+
+                      (lambda (root x y tree)
+                       (let find-utterance ((root root) (x x) (y y))
+                        (with
+                         ((if (or
+                               (< y (+ (utterance-y root) (utterance-h root)))
+                               (> y (+ (utterance-y root) (other-v11n-utterance-total-height root))))
+                           root
+                           (ormap
+                            (lambda (child)
+                             (if (< y (+ (utterance-y child) (other-v11n-utterance-total-height child)))
+                              (find-utterance child x y)
+                              #f))
+                            (utterance-args root)))))))
+
+                      (lambda (dir event)
+                       (cond
+                        ((eq? dir 'up)
+                         (set-whole-tree-offset-y! Selected-tree (+ SCROLLDIST (whole-tree-offset-y Selected-tree))))
+                        ((eq? dir 'down)
+                         (set-whole-tree-offset-y! Selected-tree (+ (- SCROLLDIST) (whole-tree-offset-y Selected-tree))))
+                        ((eq? dir 'left)
+                         (set-whole-tree-offset-x! Selected-tree (+ (- SCROLLDIST) (whole-tree-offset-x Selected-tree))))
+                        ((eq? dir 'right)
+                         (set-whole-tree-offset-x! Selected-tree (+ SCROLLDIST (whole-tree-offset-x Selected-tree))))))))
+
+(define v11ns (list default-v11n other-v11n other2-v11n))
+
+(define (cycle-v11n event)
+ (set-whole-tree-v11n! Selected-tree
+  (let* ((cur (whole-tree-v11n Selected-tree))
+         (tail (member cur v11ns)))
+   (if (or (null? tail) (null? (cdr tail)))
+    (car v11ns)
+    (cadr tail))))
+ (generate-utterance-tree Selected-tree)
+ (send Thecanvas on-paint))
+
+(define Trees (list
+               (apply whole-tree 
+                      (let* ((dummy-n (node '(0 'dummy "dummy" () () () () ()) '() (delay '()) (lambda (_) "t")))
+                             (dummy-utterance (utterance dummy-n 0 0 0 0 0 0 '() (cons '(0 0 0) '(0 0 0)))))
+                       (list dummy-n (lambda (a) '()) dummy-utterance (set) '() 0 0 0 0 default-v11n 0 0 1)))
+               (apply whole-tree 
+                      (let* ((dummy-n (node '(0 'dummy-bar "dummy bar" () () () () ()) '() (delay '()) (lambda (_) "r")))
+                             (dummy-utterance (utterance dummy-n 0 0 0 0 0 0 '() (cons '(0 0 0) '(0 0 0)))))
+                       (list dummy-n (lambda (a) '()) dummy-utterance (set) '() 800 30 (- WIDTH 600) 300 other-v11n 0 0 1)))))
+(define Selected-tree (cadr Trees))
+(define Bar-tree (cadr Trees))
+
+(define (for-all-trees f)
+ (for-each f (cdr Trees)))
+
 (define (add-key-evs args)
  (set! key-evs (apply hash-set* key-evs args)))
 
@@ -122,6 +519,7 @@
     #\O (lambda (_) (open-u (whole-tree-selection-u Selected-tree) #t Selected-tree) (send Thecanvas on-paint))
     #\C (lambda (_) (close-u (whole-tree-selection-u Selected-tree) #t Selected-tree) (send Thecanvas on-paint))
     #\z zoom-out
+    #\V cycle-v11n
     #\0 (curry nth-child 0)
     #\1 (curry nth-child 1)
     #\2 (curry nth-child 2)
@@ -145,7 +543,7 @@
                   (set! VAR3 (max (min (+ VAR3 VAR3OFFSET) VAR3MAX) VAR3MIN))
                   '())
                  (generate-utterance-tree Selected-tree))
-                (set-whole-tree-offset-x! Selected-tree (+ SCROLLDIST (whole-tree-offset-x Selected-tree))))
+                ((v11n-wheel (whole-tree-v11n Selected-tree)) 'up event))
                (send Thecanvas on-paint))
     'wheel-down (lambda (event)
                  (if (or (send event get-control-down) (send event get-shift-down) (send event get-meta-down))
@@ -160,12 +558,10 @@
                     (set! VAR3 (max (min (- VAR3 VAR3OFFSET) VAR3MAX) VAR3MIN))
                     '())
                    (generate-utterance-tree Selected-tree))
-                  (set-whole-tree-offset-x! Selected-tree (+ (- SCROLLDIST) (whole-tree-offset-x Selected-tree))))
+                  ((v11n-wheel (whole-tree-v11n Selected-tree)) 'down event))
                  (send Thecanvas on-paint))
-;    'wheel-up (lambda (_) (set-whole-tree-offset-x! Selected-tree (+ SCROLLDIST (whole-tree-offset-x Selected-tree))) (send Thecanvas on-paint))
-;    'wheel-down (lambda (_) (set-whole-tree-offset-x! Selected-tree (+ (- SCROLLDIST) (whole-tree-offset-x Selected-tree))) (send Thecanvas on-paint))
-    'wheel-left (lambda (_) (set-whole-tree-offset-y! Selected-tree (+ SCROLLDIST (whole-tree-offset-y Selected-tree))) (send Thecanvas on-paint))
-    'wheel-right (lambda (_) (set-whole-tree-offset-y! Selected-tree (+ (- SCROLLDIST) (whole-tree-offset-y Selected-tree))) (send Thecanvas on-paint))
+    'wheel-left (lambda (event) ((v11n-wheel (whole-tree-v11n Selected-tree)) 'left event) (send Thecanvas on-paint))
+    'wheel-right (lambda (event) ((v11n-wheel (whole-tree-v11n Selected-tree)) 'right event) (send Thecanvas on-paint))
     ))
 
   (nth-child (n event)
@@ -184,7 +580,7 @@
    (let* ((tree (cadr Trees))
           (n (root->node (node-data (utterance-node (whole-tree-selection-u Selected-tree))) (whole-tree-childfunc tree) '())))
     (set-whole-tree-n-tree! tree n)
-    (set-whole-tree-utterance-tree! tree (node->utterance (whole-tree-n-tree tree) 0 0 0 0 '() tree))
+    (set-whole-tree-utterance-tree! tree ((v11n-node->v11n-utterance (whole-tree-v11n tree)) (whole-tree-n-tree tree) 0 0 0 0 '() tree))
     (set-whole-tree-selection! tree '())
     (set-whole-tree-offset-x! tree 0)
     (set-whole-tree-offset-y! tree 0)
@@ -216,7 +612,7 @@
   ))
 
 (define (go dir tree)
- (let ((new-sel (apply find-utterance (whole-tree-utterance-tree tree)
+ (let ((new-sel (apply (v11n-find-utterance (whole-tree-v11n tree)) (whole-tree-utterance-tree tree)
                  (cond
                   ((eq? dir 'left)
                    (list (+ (utterance-x (whole-tree-selection-u tree)) -1) (utterance-y (whole-tree-selection-u tree)) tree))
@@ -316,8 +712,8 @@
    (inherit with-gl-context swap-gl-buffers)
  
    (define/override (on-paint)
-     (with
-      ((with-gl-context
+;     (with
+      (with-gl-context
         (lambda ()
          (gl-clear-color 0.0 0.0 0.0 0.0)
          (gl-clear 'color-buffer-bit)
@@ -327,66 +723,66 @@
    
          (gl-enable 'scissor-test)
    
-         (for-each paint-tree Trees)
+         (for-each (lambda (tree) ((v11n-paint-tree (whole-tree-v11n tree)) tree)) Trees)
    
          (gl-disable 'scissor-test)
          (swap-gl-buffers))))
   
-      (paint-tree (tree)
-       (with
-        ((apply gl-scissor (whole-tree-dim tree))
-         (apply gl-viewport (whole-tree-dim tree))
-         (gl-matrix-mode 'projection)
-         (gl-load-identity)
-         (gl-ortho
-          (- (whole-tree-offset-x tree))
-          (+ (- (whole-tree-offset-x tree)) (/ (whole-tree-w tree) (whole-tree-zoom tree)))
-          (+ (whole-tree-offset-y tree) (- (/ (whole-tree-h tree) (whole-tree-zoom tree))))
-          (whole-tree-offset-y tree)
-          -1.0
-          1.0)
-         (gl-matrix-mode 'modelview)
-         (gl-load-identity)
-         (utterance-paint (whole-tree-utterance-tree tree) tree))
-  
-        (utterance-paint (u tree)
-         (with
-          ((let* ((text ((node-text-func (utterance-node u)) (utterance-node u)))
-                  (x (utterance-x u))
-                  (y (utterance-y u))
-                  (w (utterance-w u))
-                  (h (utterance-h u))
-                  (text-w (utterance-text-w u))
-                  (text-h (utterance-text-h u))
-                  (args (utterance-args u))
-                  (clr (utterance-clr u)))
-            (if (invisible? x y w h tree)
-             '()
-             (begin
-              (draw-rectangle (if (eq? Selected-tree tree) (cdr clr) (map (curryr / 3) (cdr clr))) x y w h)
-              (if (< (whole-tree-zoom tree) 1) '()
-               (draw-text
-                text
-                (* (whole-tree-zoom tree) (center x w (- text-w PADDING) (- (whole-tree-offset-x tree)) (whole-tree-w tree)))
-                (* (whole-tree-zoom tree) (+ text-h -3 (center y h text-h (- (whole-tree-offset-y tree)) (whole-tree-h tree))))
-                (car clr)
-                tree))
-              (for-each (lambda (arg) (utterance-paint arg tree)) args)))))
-  
-         (invisible? (x y w h tree)
-          (or
-           (and (< (+ x w) (- (whole-tree-offset-x tree))) (not VERTICAL))
-           (and (< (+ y h) (- (whole-tree-offset-y tree))) VERTICAL)
-           (> x (- (/ (whole-tree-w tree) (whole-tree-zoom tree)) (whole-tree-offset-x tree)))
-           (> y (- (/ (whole-tree-h tree) (whole-tree-zoom tree)) (whole-tree-offset-y tree)))))
-    
-         (center (offset lenwhole lenpiece start width)
-          (let ((visible-width (- (min (+ offset lenwhole) (+ start width)) (max offset start))))
-           (if (< visible-width lenpiece)
-            (if (< offset start)
-             (- (+ offset lenwhole) lenpiece)
-             offset)
-            (+ (max offset start) (/ visible-width 2) (- (/ lenpiece 2))))))))))))
+;      (paint-tree (tree)
+;       (with
+;        ((apply gl-scissor (whole-tree-dim tree))
+;         (apply gl-viewport (whole-tree-dim tree))
+;         (gl-matrix-mode 'projection)
+;         (gl-load-identity)
+;         (gl-ortho
+;          (- (whole-tree-offset-x tree))
+;          (+ (- (whole-tree-offset-x tree)) (/ (whole-tree-w tree) (whole-tree-zoom tree)))
+;          (+ (whole-tree-offset-y tree) (- (/ (whole-tree-h tree) (whole-tree-zoom tree))))
+;          (whole-tree-offset-y tree)
+;          -1.0
+;          1.0)
+;         (gl-matrix-mode 'modelview)
+;         (gl-load-identity)
+;         (utterance-paint (whole-tree-utterance-tree tree) tree))
+;  
+;        (utterance-paint (u tree)
+;         (with
+;          ((let* ((text ((node-text-func (utterance-node u)) (utterance-node u)))
+;                  (x (utterance-x u))
+;                  (y (utterance-y u))
+;                  (w (utterance-w u))
+;                  (h (utterance-h u))
+;                  (text-w (utterance-text-w u))
+;                  (text-h (utterance-text-h u))
+;                  (args (utterance-args u))
+;                  (clr (utterance-clr u)))
+;            (if (invisible? x y w h tree)
+;             '()
+;             (begin
+;              (draw-rectangle (if (eq? Selected-tree tree) (cdr clr) (map (curryr / 3) (cdr clr))) x y w h)
+;              (if (< (whole-tree-zoom tree) 1) '()
+;               (draw-text
+;                text
+;                (* (whole-tree-zoom tree) (center x w (- text-w PADDING) (- (whole-tree-offset-x tree)) (whole-tree-w tree)))
+;                (* (whole-tree-zoom tree) (+ text-h -3 (center y h text-h (- (whole-tree-offset-y tree)) (whole-tree-h tree))))
+;                (car clr)
+;                tree))
+;              (for-each (lambda (arg) (utterance-paint arg tree)) args)))))
+;  
+;         (invisible? (x y w h tree)
+;          (or
+;           (and (< (+ x w) (- (whole-tree-offset-x tree))) (not VERTICAL))
+;           (and (< (+ y h) (- (whole-tree-offset-y tree))) VERTICAL)
+;           (> x (- (/ (whole-tree-w tree) (whole-tree-zoom tree)) (whole-tree-offset-x tree)))
+;           (> y (- (/ (whole-tree-h tree) (whole-tree-zoom tree)) (whole-tree-offset-y tree)))))
+;    
+;         (center (offset lenwhole lenpiece start width)
+;          (let ((visible-width (- (min (+ offset lenwhole) (+ start width)) (max offset start))))
+;           (if (< visible-width lenpiece)
+;            (if (< offset start)
+;             (- (+ offset lenwhole) lenpiece)
+;             offset)
+;            (+ (max offset start) (/ visible-width 2) (- (/ lenpiece 2))))))))))))
 
    (define/override (on-event event)
     (if (send event dragging?)
@@ -548,17 +944,16 @@
    (ftglRenderFont Font (format "~a" t) 65535))
 
   (paint-runtime-vals ()
-   (let ((width (foldl
-                 (lambda (u n width)
-                  (let ((text (format "~a" ((node-text-func (utterance-node u)) (utterance-node u)))))
-                   (draw-rectangle '(96 96 0) (if (zero? n) 600 610) (+ -330 (* 20 n)) (box-width text) 20)
-                   (gl-color 1 1 1)
-                   (gl-raster-pos (if (zero? n) 600 610) (- 313 (* 20 n)))
-                   (ftglRenderFont Font text 65535)
-                   (max width (box-width text))))
-                 0
-                 (cons u (utterance-args u))
-                 (build-list (+ 1 (length (utterance-args u))) identity))))
+   (let ((width (apply max (map (lambda (u) (box-width (format "~a" ((node-text-func (utterance-node u)) (utterance-node u))))) (cons u (utterance-args u))))))
+    (for-each
+     (lambda (u n)
+      (let ((text (format "~a" ((node-text-func (utterance-node u)) (utterance-node u)))))
+       (draw-rectangle '(96 96 0) (if (zero? n) 600 610) (+ -330 (* 20 n)) (if (zero? n) (+ width 10) width) 20)
+       (gl-color 1 1 1)
+       (gl-raster-pos (if (zero? n) 600 610) (- 313 (* 20 n)))
+       (ftglRenderFont Font text 65535)))
+     (cons u (utterance-args u))
+     (build-list (+ 1 (length (utterance-args u))) identity))
     (let ((r-vs (list-ref (node-data (utterance-node u)) 7)))
      (if (null? r-vs)
       '()
@@ -581,14 +976,6 @@
          (list-ref r-v 4)))
        r-vs
        (build-list (length r-vs) identity))))))
-
-
-;   (gl-raster-pos 630 310)
-;   (ftglRenderFont Font (format "~a" (length (list-ref (node-data (utterance-node u)) 7))) 65535)
-;   (foldl
-;    (lambda (val res) (gl-raster-pos 600 res) (ftglRenderFont Font (format "~s" val) 65535) (- res 20))
-;    290
-;    (list-ref (node-data (utterance-node u)) 7)))
 
   (set-tree ()
    (set-whole-tree-childfunc! Bar-tree (whole-tree-childfunc Selected-tree))
@@ -655,40 +1042,40 @@
  (and (> x (car dim)) (> y (cadr dim)) (< x (+ (car dim) (caddr dim))) (< y (+ (cadr dim) (cadddr dim)))))
 
 (define (utterance-parent u tree)
- (apply find-utterance (whole-tree-utterance-tree tree)
+ (apply (v11n-find-utterance (whole-tree-v11n tree)) (whole-tree-utterance-tree tree)
   (if VERTICAL
    (list (+ (utterance-x u) -1) (utterance-y u) tree)
    (list (utterance-x u) (+ (utterance-y u) -1) tree))))
    
-(define (find-utterance root x y tree)
- (with
-  ((if (or
-        (above-bottom-of-utterance?)
-        (utterance-is-closed?)
-        (has-no-children?)
-        (is-to-the-right-of-utterance?))
-    root
-    (pass-on-to-child)))
-
-  (above-bottom-of-utterance? ()
-   (< (min-dim x y) (+ (utterance-min-dim root) (utterance-min-dim-span root))))
-
-  (utterance-is-closed? ()
-   (closed? (utterance-node root) tree))
-        
-  (has-no-children? ()
-   (null? (node-args (utterance-node root))))
-
-  (is-to-the-right-of-utterance? ()
-   (>= (maj-dim x y) (let ((baby (last (utterance-args root)))) (+ (utterance-maj-dim baby) (utterance-maj-dim-span baby)))))
-
-  (pass-on-to-child ()
-   (ormap
-    (lambda (child)
-     (if (< (maj-dim x y) (+ (utterance-maj-dim child) (utterance-maj-dim-span child)))
-      (find-utterance child x y tree)
-      #f))
-    (utterance-args root)))))
+;(define (find-utterance root x y tree)
+; (with
+;  ((if (or
+;        (above-bottom-of-utterance?)
+;        (utterance-is-closed?)
+;        (has-no-children?)
+;        (is-to-the-right-of-utterance?))
+;    root
+;    (pass-on-to-child)))
+;
+;  (above-bottom-of-utterance? ()
+;   (< (min-dim x y) (+ (utterance-min-dim root) (utterance-min-dim-span root))))
+;
+;  (utterance-is-closed? ()
+;   (closed? (utterance-node root) tree))
+;        
+;  (has-no-children? ()
+;   (null? (node-args (utterance-node root))))
+;
+;  (is-to-the-right-of-utterance? ()
+;   (>= (maj-dim x y) (let ((baby (last (utterance-args root)))) (+ (utterance-maj-dim baby) (utterance-maj-dim-span baby)))))
+;
+;  (pass-on-to-child ()
+;   (ormap
+;    (lambda (child)
+;     (if (< (maj-dim x y) (+ (utterance-maj-dim child) (utterance-maj-dim-span child)))
+;      (find-utterance child x y tree)
+;      #f))
+;    (utterance-args root)))))
 
 (define (select u tree)
  (set! Selected-tree tree)
@@ -762,7 +1149,7 @@
  (list (car l) (- HEIGHT (+ (cadddr l) (cadr l))) (caddr l) (cadddr l)))
 
 (define (generate-utterance-tree tree)
- (set-whole-tree-utterance-tree! tree (node->utterance (whole-tree-n-tree tree) (utterance-x (whole-tree-utterance-tree tree)) (utterance-y (whole-tree-utterance-tree tree)) (if VERTICAL (node-width (whole-tree-n-tree tree) tree) -1) 0 1 tree)))
+ (set-whole-tree-utterance-tree! tree ((v11n-node->v11n-utterance (whole-tree-v11n tree)) (whole-tree-n-tree tree) (utterance-x (whole-tree-utterance-tree tree)) (utterance-y (whole-tree-utterance-tree tree)) (if VERTICAL (node-width (whole-tree-n-tree tree) tree) -1) 0 1 tree)))
 
 (define (find-utterance-from-laddr tree laddr)
  (if (null? laddr)
@@ -813,10 +1200,11 @@
     y
     w
     h
+    default-v11n
     0
     0
     1))))
- (set-whole-tree-utterance-tree! tree (node->utterance (whole-tree-n-tree tree) 0 0 w 0 '() tree))
+ (set-whole-tree-utterance-tree! tree ((v11n-node->v11n-utterance default-v11n) (whole-tree-n-tree tree) 0 0 w 0 '() tree))
  (set-whole-tree-selection! tree '())
  (set! Trees (append Trees (list tree)))
  tree))
@@ -878,43 +1266,43 @@
 ;(define get-color (lambda (a94 a95) (letrec ((v35 a95)(v26 a94)(v96 (cons (quote (255 255 255)) (quote (0 0 255))))) (if (equal? (node-laddr v26) (whole-tree-selection v35)) v96 (letrec ((v110 (cons (quote (255 255 255)) (quote (112 0 112))))) (if (equal? (car (node-data v26)) (car (node-data (utterance-node (whole-tree-selection-u v35))))) v110 (letrec ((v85 (if (null? (node-laddr v26)) 0 (last (node-laddr v26))))(v188 (cons (quote (255 255 255)) (quote (80 0 0))))) (if (odd? (length (node-laddr v26))) (if (zero? v85) v188 (letrec ((v146 (cons (quote (255 255 255)) (quote (96 32 0))))(v144 (lambda () -))(v128 (cons (quote (255 255 255)) (quote (96 0 0))))(v142 v2)) (if (odd? v85) v128 v146))) (if (zero? v85) v188 (letrec ((v160 (cons (quote (255 255 255)) (quote (96 72 0))))(v174 (cons (quote (255 255 255)) (quote (96 96 0))))) (if (odd? v85) v160 v174)))))))))))
 
 
-(define (node->utterance n x y w row siblings tree)
- (with
-  ((let ((children 
-          (if (closed? n tree)
-           '()
-           (let ((child-w (if VERTICAL (foldl max 0 (map (lambda (arg) (node-width arg tree)) (node-args n))) -1)))
-            (caddr
-             (foldl
-              (lambda (arg data)
-               (let ((res (node->utterance
-                           arg
-                           (if VERTICAL (+ (car data) w) (car data))
-                           (if VERTICAL (cadr data) (+ (cadr data) (node-height arg tree)))
-                           child-w
-                           (+ 1 row)
-                           (- (length (node-args n)) 1)
-                           tree)))
-                (list
-                 (if VERTICAL (car data) (+ (car data) (utterance-w res)))
-                 (if VERTICAL (+ (cadr data) (node-height arg tree)) (cadr data))
-                 (if (null? res)
-                  (caddr data)
-                  (append
-                   (caddr data)
-                   (list res))))))
-              (list x y '())
-              (node-args n)))))))
-    (utterance
-     n
-     x
-     y
-     (if VERTICAL w (max (box-width ((node-text-func n) n)) (apply + (map utterance-w children))))
-     (node-height n tree)
-     (box-width ((node-text-func n) n))
-     (box-height ((node-text-func n) n))
-     children
-     (get-color n tree))))
+;(define (node->utterance n x y w row siblings tree)
+; (with
+;  ((let ((children 
+;          (if (closed? n tree)
+;           '()
+;           (let ((child-w (if VERTICAL (foldl max 0 (map (lambda (arg) (node-width arg tree)) (node-args n))) -1)))
+;            (caddr
+;             (foldl
+;              (lambda (arg data)
+;               (let ((res (node->utterance
+;                           arg
+;                           (if VERTICAL (+ (car data) w) (car data))
+;                           (if VERTICAL (cadr data) (+ (cadr data) (node-height arg tree)))
+;                           child-w
+;                           (+ 1 row)
+;                           (- (length (node-args n)) 1)
+;                           tree)))
+;                (list
+;                 (if VERTICAL (car data) (+ (car data) (utterance-w res)))
+;                 (if VERTICAL (+ (cadr data) (node-height arg tree)) (cadr data))
+;                 (if (null? res)
+;                  (caddr data)
+;                  (append
+;                   (caddr data)
+;                   (list res))))))
+;              (list x y '())
+;              (node-args n)))))))
+;    (utterance
+;     n
+;     x
+;     y
+;     (if VERTICAL w (max (box-width ((node-text-func n) n)) (apply + (map utterance-w children))))
+;     (node-height n tree)
+;     (box-width ((node-text-func n) n))
+;     (box-height ((node-text-func n) n))
+;     children
+;     (get-color n tree))))))
 
 ;  (get-color (n siblings tree)
 ;   (if (equal? (node-laddr n) (whole-tree-selection tree))
@@ -935,7 +1323,6 @@
 ;        (if (odd? row)
 ;         (if (zero? col) COLOR5 (if (odd? col) COLOR1 COLOR2))
 ;         (if (zero? col) COLOR6 (if (odd? col) COLOR3 COLOR4)))))))))
-  ))
 
 (define (root->node data childlist laddr)
  (node data laddr
@@ -956,7 +1343,7 @@
 
 (define Chosen-tree '())
 (define-for-syntax mouse-handler-hash (hash
-			'clicked '(find-utterance
+			'clicked '((v11n-find-utterance (whole-tree-v11n tree))
                                    (whole-tree-utterance-tree tree)
                                    (+
                                     (- (whole-tree-x tree))
