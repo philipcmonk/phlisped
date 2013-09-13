@@ -22,7 +22,7 @@
 (define-ftgl ftglRenderFont (_fun _FTGLfont _string _int -> _void))
 (define-ftgl ftglDestroyFont (_fun _FTGLfont -> _void))
 
-(provide my-canvas% box-width box-height box-maj-dim node-width node-height node-maj-dim VERTICAL display-on-screen add-to-screen Thecanvas Info Selected-tree utterance-parent utterance-node utterance-args node-data node-laddr whole-tree-selection-u whole-tree-selection set-whole-tree-selection! whole-tree-open set-whole-tree-open! whole-tree-utterance-tree add-key-evs key-evs update-childfuncs set-info enter-insert-mode exit-insert-mode enter-scope-mode exit-scope-mode enter-argify-mode exit-argify-mode enter-search-mode exit-search-mode set-search-results Search-results show-search-tree scroll-search-results remove-search-tree paint-info go find-utterance-from-laddr-safe for-all-trees)
+(provide my-canvas% box-width box-height box-maj-dim node-width node-height node-maj-dim VERTICAL display-on-screen add-to-screen Thecanvas Info Selected-tree utterance-parent utterance-node utterance-args node-data node-laddr whole-tree-selection-u whole-tree-selection set-whole-tree-selection! whole-tree-open set-whole-tree-open! whole-tree-utterance-tree add-key-evs key-evs update-childfuncs set-info enter-insert-mode exit-insert-mode enter-scope-mode exit-scope-mode enter-argify-mode exit-argify-mode enter-search-mode exit-search-mode set-search-results Search-results show-search-tree scroll-search-results remove-search-tree paint-info semantic-go find-utterance-from-laddr-safe for-all-trees)
 
 (struct node (data laddr prom-args text-func) #:transparent)
 (struct utterance (node x y w h text-w text-h args clr) #:transparent)
@@ -506,9 +506,6 @@
                                   (text-h (utterance-text-h u))
                                   (args (utterance-args u))
                                   (clr (utterance-clr u)))
-                            (if (invisible? x y w h tree)
-                             '()
-                             (begin
                               (draw-rectangle (if (eq? Selected-tree tree) (cdr clr) (map (curryr / 3) (cdr clr))) x y t-w t-h)
                               (if (and (< (/ (- text-w PADDING) (whole-tree-zoom tree)) w)
                                        (< (/ text-h (whole-tree-zoom tree)) h))
@@ -519,7 +516,7 @@
                                 (car clr)
                                 tree)
                                '())
-                              (for-each (lambda (arg) (utterance-paint arg tree)) args)))))
+                              (for-each (lambda (arg) (utterance-paint arg tree)) args)))
                   
                          (invisible? (x y w h tree)
                           (or
@@ -586,15 +583,15 @@
                         (let find-utterance ((root root))
 ;                         (if (or (< y (+ (utterance-y root) (utterance-h root))) (null? (utterance-args root)))
                          (if (or (and (= (utterance-w root) (treemap-utterance-total-width root)) (< y (+ (utterance-y root) (utterance-h root))))
-                                 (and (= (utterance-h root) (treemap-utterance-total-width root)) (< x (+ (utterance-x root) (utterance-w root))))
+                                 (and (= (utterance-h root) (treemap-utterance-total-height root)) (< x (+ (utterance-x root) (utterance-w root))))
                                  (null? (utterance-args root)))
                           root
                           (ormap
                            (lambda (child)
                             (if (and
-                                 (> y (utterance-y child))
+                                 (>= y (utterance-y child))
                                  (< y (+ (utterance-y child) (treemap-utterance-total-height child)))
-                                 (> x (utterance-x child))
+                                 (>= x (utterance-x child))
                                  (< x (+ (utterance-x child) (treemap-utterance-total-width child))))
                              (find-utterance child)
                              #f))
@@ -697,7 +694,11 @@
     #\j (lambda (_) (go 'down Selected-tree))
     #\k (lambda (_) (go 'up Selected-tree))
     #\l (lambda (_) (go 'right Selected-tree))
-    #\o (lambda (_) (open-u (whole-tree-selection-u Selected-tree) #f Selected-tree) (send Thecanvas on-paint))
+    #\A (lambda (_) (semantic-go 'left Selected-tree))
+    #\S (lambda (_) (semantic-go 'down Selected-tree))
+    #\W (lambda (_) (semantic-go 'up Selected-tree))
+    #\D (lambda (_) (semantic-go 'right Selected-tree))
+    #\O (lambda (_) (open-u (whole-tree-selection-u Selected-tree) #f Selected-tree) (send Thecanvas on-paint))
     #\c (lambda (_) (close-u (whole-tree-selection-u Selected-tree) #f Selected-tree) (send Thecanvas on-paint))
     #\O (lambda (_) (open-u (whole-tree-selection-u Selected-tree) #t Selected-tree) (send Thecanvas on-paint))
     #\C (lambda (_) (close-u (whole-tree-selection-u Selected-tree) #t Selected-tree) (send Thecanvas on-paint))
@@ -808,6 +809,26 @@
  (select (if new-sel new-sel (whole-tree-selection-u tree)) tree))
  (generate-utterance-tree tree)
  (send Thecanvas on-paint))
+
+(define (semantic-go dir tree)
+ (let ((new-sel (cond
+                 ((eq? dir 'left)
+                  (let ((mem (takef (utterance-args (utterance-parent (whole-tree-selection-u tree) tree)) (negate (curry equal? (whole-tree-selection-u tree))))))
+                   (if (null? mem)
+                    #f
+                    (last mem))))
+                 ((eq? dir 'down)
+                  (car (utterance-args (whole-tree-selection-u tree))))
+                 ((eq? dir 'up)
+                  (utterance-parent (whole-tree-selection-u tree) tree))
+                 ((eq? dir 'right)
+                  (let ((mem (member (whole-tree-selection-u tree) (utterance-args (utterance-parent (whole-tree-selection-u tree) tree)))))
+                   (if (or (null? mem) (null? (cdr mem)))
+                    #f
+                    (cadr mem)))))))
+  (select (or new-sel (whole-tree-selection-u tree)) tree)
+  (generate-utterance-tree tree)
+  (send Thecanvas on-paint)))
 
 (define mouse-evs
  (hash
@@ -1248,10 +1269,15 @@
  (and (> x (car dim)) (> y (cadr dim)) (< x (+ (car dim) (caddr dim))) (< y (+ (cadr dim) (cadddr dim)))))
 
 (define (utterance-parent u tree)
- (apply (v11n-find-utterance (whole-tree-v11n tree)) (whole-tree-utterance-tree tree)
-  (if VERTICAL
-   (list (+ (utterance-x u) -1) (utterance-y u) tree)
-   (list (utterance-x u) (+ (utterance-y u) -1) tree))))
+ (let loop ((root (whole-tree-utterance-tree tree)))
+  (if (member u (utterance-args root))
+   root
+   (ormap loop (utterance-args root)))))
+ 
+; (apply (v11n-find-utterance (whole-tree-v11n tree)) (whole-tree-utterance-tree tree)
+;  (if VERTICAL
+;   (list (+ (utterance-x u) -1) (utterance-y u) tree)
+;   (list (utterance-x u) (+ (utterance-y u) -1) tree))))
    
 ;(define (find-utterance root x y tree)
 ; (with

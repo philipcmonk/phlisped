@@ -80,7 +80,7 @@
                                                           (last (whole-tree-selection Selected-tree))
                                                           (whole-tree-utterance-tree tree))))
                                                  (set (append (drop-right (whole-tree-selection Selected-tree) 1) (list (+ 1 (last (whole-tree-selection Selected-tree)))))))))))
-   #:selection-updater (lambda () (go 'right Selected-tree)))))
+   #:selection-updater (lambda () (semantic-go 'right Selected-tree)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;                                 Add Child                               ;;;
@@ -98,7 +98,7 @@
                          (lambda (tree)
                           (set-whole-tree-open! tree (set-union (whole-tree-open tree) (set (whole-tree-selection Selected-tree) (append (whole-tree-selection Selected-tree) (list 0))))))))
    #:selection-updater (lambda ()
-                        (go 'down Selected-tree)))))
+                        (semantic-go 'down Selected-tree)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;                                Insert Text                              ;;;
@@ -140,7 +140,7 @@
       (remove-search-tree)
       (write-text-to-graph)
       (exit-insert-mode)
-      (go 'up Selected-tree)
+      (semantic-go 'up Selected-tree)
       (insert-text event))
      ((eq? c #\return)
       (remove-search-tree)
