@@ -128,7 +128,7 @@ A visualization must implement the following functions:
 
 * paint-tree
 * node->v11n-utterance
-* go {'left,'right,'up,'down}
+* wheel {'left,'right,'up,'down}
 * find-utterance
 
 A visualization may implement the following functions:
