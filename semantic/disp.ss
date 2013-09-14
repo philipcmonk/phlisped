@@ -5,7 +5,8 @@
 (require sgl sgl/gl)
 
 (require "common.ss")
-(require "default-v11n.ss")
+(require "default-horizontal-v11n.ss")
+(require "default-vertical-v11n.ss")
 (require "other-v11n.ss")
 (require "other2-v11n.ss")
 (require "treemap-v11n.ss")
@@ -52,7 +53,7 @@
 
 (define win (new frame% (label "vilisp") (min-width WIDTH) (min-height HEIGHT)))
 
-(define v11ns (list default-v11n treemap-v11n other-v11n other2-v11n))
+(define v11ns (list default-horizontal-v11n default-vertical-v11n treemap-v11n other-v11n other2-v11n))
 
 (define (cycle-v11n event)
  (set-whole-tree-v11n! Selected-tree
@@ -68,7 +69,7 @@
                (apply whole-tree 
                       (let* ((dummy-n (node '(0 'dummy "dummy" () () () () ()) '() (delay '()) (lambda (_) "t")))
                              (dummy-utterance (utterance dummy-n 0 0 0 0 0 0 '() (cons '(0 0 0) '(0 0 0)))))
-                       (list dummy-n (lambda (a) '()) dummy-utterance (set) '() 0 0 0 0 default-v11n 0 0 1)))
+                       (list dummy-n (lambda (a) '()) dummy-utterance (set) '() 0 0 0 0 default-horizontal-v11n 0 0 1)))
                (apply whole-tree 
                       (let* ((dummy-n (node '(0 'dummy-bar "dummy bar" () () () () ()) '() (delay '()) (lambda (_) "r")))
                              (dummy-utterance (utterance dummy-n 0 0 0 0 0 0 '() (cons '(0 0 0) '(0 0 0)))))
@@ -110,7 +111,7 @@
     #\S (lambda (_) (semantic-go 'down Selected-tree))
     #\W (lambda (_) (semantic-go 'up Selected-tree))
     #\D (lambda (_) (semantic-go 'right Selected-tree))
-    #\O (lambda (_) (open-u (whole-tree-selection-u Selected-tree) #f Selected-tree) (send Thecanvas on-paint))
+    #\o (lambda (_) (open-u (whole-tree-selection-u Selected-tree) #f Selected-tree) (send Thecanvas on-paint))
     #\c (lambda (_) (close-u (whole-tree-selection-u Selected-tree) #f Selected-tree) (send Thecanvas on-paint))
     #\O (lambda (_) (open-u (whole-tree-selection-u Selected-tree) #t Selected-tree) (send Thecanvas on-paint))
     #\C (lambda (_) (close-u (whole-tree-selection-u Selected-tree) #t Selected-tree) (send Thecanvas on-paint))
@@ -641,7 +642,7 @@
  (list (car l) (- HEIGHT (+ (cadddr l) (cadr l))) (caddr l) (cadddr l)))
 
 (define (generate-utterance-tree tree)
- (set-whole-tree-utterance-tree! tree ((v11n-node->v11n-utterance (whole-tree-v11n tree)) (whole-tree-n-tree tree) (utterance-x (whole-tree-utterance-tree tree)) (utterance-y (whole-tree-utterance-tree tree)) (if VERTICAL (node-width (whole-tree-n-tree tree) tree) -1) 0 1 tree)))
+ (set-whole-tree-utterance-tree! tree ((v11n-node->v11n-utterance (whole-tree-v11n tree)) (whole-tree-n-tree tree) (utterance-x (whole-tree-utterance-tree tree)) (utterance-y (whole-tree-utterance-tree tree)) (if VERTICAL (node-width (whole-tree-n-tree tree) tree) 0) 0 1 tree)))
 
 (define (find-utterance-from-laddr tree laddr)
  (if (null? laddr)
@@ -685,11 +686,11 @@
     y
     w
     h
-    default-v11n
+    default-horizontal-v11n
     0
     0
     1))))
- (set-whole-tree-utterance-tree! tree ((v11n-node->v11n-utterance default-v11n) (whole-tree-n-tree tree) 0 0 w 0 '() tree))
+ (set-whole-tree-utterance-tree! tree ((v11n-node->v11n-utterance default-horizontal-v11n) (whole-tree-n-tree tree) 0 0 0 0 '() tree))
  (set-whole-tree-selection! tree '())
  (set! Trees (append Trees (list tree)))
  tree))

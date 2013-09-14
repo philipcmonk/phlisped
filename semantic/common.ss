@@ -50,16 +50,16 @@
 (define node-args (compose force node-prom-args))
 
 (define (node-width n tree)
- (if VERTICAL (box-width ((node-text-func (node-data n)) n)) (node-maj-dim n tree)))
+ (if VERTICAL (box-width ((node-text-func n) (node-data n))) (node-maj-dim n tree)))
 
 (define (node-height n tree)
  (if VERTICAL (node-maj-dim n tree) CELLHEIGHT))
 
 (define (node-maj-dim n tree)
  (if (closed? n tree)
-  (box-maj-dim ((node-text-func (node-data n)) n))
+  (box-maj-dim ((node-text-func n) (node-data n)))
   (max
-   (box-maj-dim ((node-text-func (node-data n)) n))
+   (box-maj-dim ((node-text-func n) (node-data n)))
    (foldl
     +
     0
