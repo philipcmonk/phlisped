@@ -30,17 +30,43 @@
   (datum->syntax stx `(letrec ,lams ,@body))))
 
 (struct node (data laddr prom-args text-func) #:transparent)
+(struct utterance (node x y w h text-w text-h args clr) #:transparent)
+(struct whole-tree (n-tree childfunc utterance-tree open selection x y w h v11n offset-x offset-y zoom) #:mutable)
+(struct v11n (paint-tree node->v11n-utterance find-utterance wheel))
+
+(define Selected-tree '())
+(define (set-selected-tree tree)
+ (set! Selected-tree tree))
+
+(define Font #f)
+(define (set-font f)
+ (set! Font f))
+
+(define PADDING 5)
+(define VERTICAL #f)
+(define CELLHEIGHT 25)
+(define SCROLLDIST 100)
 
 (define node-args (compose force node-prom-args))
 
-(struct utterance (node x y w h text-w text-h args clr) #:transparent)
+(define (node-width n tree)
+ (if VERTICAL (box-width ((node-text-func (node-data n)) n)) (node-maj-dim n tree)))
 
-(struct whole-tree (n-tree childfunc utterance-tree open selection x y w h v11n offset-x offset-y zoom) #:mutable)
+(define (node-height n tree)
+ (if VERTICAL (node-maj-dim n tree) CELLHEIGHT))
+
+(define (node-maj-dim n tree)
+ (if (closed? n tree)
+  (box-maj-dim ((node-text-func (node-data n)) n))
+  (max
+   (box-maj-dim ((node-text-func (node-data n)) n))
+   (foldl
+    +
+    0
+    (map (lambda (arg) (node-maj-dim arg tree)) (node-args n))))))
 
 (define (whole-tree-selection-u tree)
  (find-utterance-from-laddr-safe (whole-tree-utterance-tree tree) (whole-tree-selection tree)))
-
-(struct v11n (paint-tree node->v11n-utterance find-utterance wheel))
 
 (define (find-utterance-from-laddr-safe tree laddr)
  (if (null? laddr)
@@ -48,11 +74,6 @@
   (if (> (length (utterance-args tree)) (car laddr))
    (find-utterance-from-laddr-safe (list-ref (utterance-args tree) (car laddr)) (cdr laddr))
    #f)))
-
-(define Selected-tree '())
-
-(define (set-selected-tree tree)
- (set! Selected-tree tree))
 
 (define (draw-rectangle clr x y w h)
  (gl-color (/ (car clr) 255) (/ (cadr clr) 255) (/ (caddr clr) 255))
@@ -74,11 +95,6 @@
 (define (whole-tree-dim tree)
  (list (whole-tree-x tree) (whole-tree-y tree) (whole-tree-w tree) (whole-tree-h tree)))
 
-(define PADDING 5)
-(define VERTICAL #f)
-(define CELLHEIGHT 25)
-(define SCROLLDIST 100)
-
 (define (box-width box)
  (+ PADDING (ftglGetFontAdvance Font box)))
 
@@ -88,24 +104,8 @@
 (define (box-maj-dim box)
  (if VERTICAL (box-height box) (box-width box)))
 
-(define (node-width n tree)
- (if VERTICAL (box-width ((node-text-func (node-data n)) n)) (node-maj-dim n tree)))
-
-(define (node-height n tree)
- (if VERTICAL (node-maj-dim n tree) CELLHEIGHT))
-
 (define (open? n tree) (set-member? (whole-tree-open tree) (node-laddr n)))
 (define closed? (negate open?))
-
-(define (node-maj-dim n tree)
- (if (closed? n tree)
-  (box-maj-dim ((node-text-func (node-data n)) n))
-  (max
-   (box-maj-dim ((node-text-func (node-data n)) n))
-   (foldl
-    +
-    0
-    (map (lambda (arg) (node-maj-dim arg tree)) (node-args n))))))
 
 (define get-color (lambda (a94 a95) (letrec ((v432 0.6180339887498949) (v354 (lambda (a359 a364) (letrec ((v358 a359)) (- v358 (letrec ((v363 a364)) (* v363 (truncate (/ v358 v363)))))))) (v206 (lambda (a222 a229 a230) (letrec ((v221 a222) (v223 (letrec ((v227 a230) (v228 a229)) (* v227 v228))) (v231 (* v223 (- 1 (abs (- (v354 (* v221 6) 2) 1)))))) (cond ((< v221 (/ 1 6)) (list v223 v231 0)) ((< v221 (/ 2 6)) (list v231 v223 0)) ((< v221 (/ 3 6)) (list 0 v223 v231)) ((< v221 (/ 4 6)) (list 0 v231 v223)) ((< v221 (/ 5 6)) (list v231 0 v223)) ((< v221 (/ 6 6)) (list v223 0 v231)))))) (v35 a95) (v26 a94) (v96 (cons (quote (0 0 0)) (map (curry * 255) (v206 0.15 1.0 1.0))))) (if (equal? (node-laddr v26) (whole-tree-selection v35)) v96 (letrec ((v110 (cons (quote (0 0 0)) (map (curry * 255) (v206 0.15 0.9 0.9))))) (if (equal? (car (node-data v26)) (car (node-data (utterance-node (whole-tree-selection-u v35))))) v110 (letrec ((v450 (lambda () (v354 (* (letrec ((v452 (lambda (a462) (letrec ((v461 a462)) (if (null? v461) 0 (last v461)))))) (v452 (node-laddr v26))) v432) 1))) (v85 (if (null? (node-laddr v26)) 0 (last (node-laddr v26)))) (v188 (cons (quote (255 255 255)) (quote (80 0 0)))) (v373 (cons (quote (255 255 255)) (map (curry * 255) (v206 (v450) 0.8 0.8)))) (v405 (cons (quote (255 255 255)) (map (curry * 255) (v206 (v450) 0.6 0.8))))) (if (odd? (length (node-laddr v26))) v373 v405))))))))
 
@@ -116,6 +116,3 @@
 (define (maj-dim x y) (if VERTICAL y x))
 (define (min-dim x y) (if VERTICAL x y))
 
-(define Font #f)
-(define (set-font f)
- (set! Font f))
