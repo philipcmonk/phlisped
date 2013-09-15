@@ -60,6 +60,6 @@
 ;         (* (whole-tree-zoom tree) (+ text-h -3 (center y h text-h (- (whole-tree-offset-y tree)) (whole-tree-h tree))))
 ;         (car clr)
 ;         tree))
-       (for-each (lambda (arg) (utterance-paint arg tree)) args))))))))
+       (for-each touch (map (lambda (arg) (future (lambda () (utterance-paint arg tree)))) args)))))))))
 
 

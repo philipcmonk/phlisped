@@ -339,7 +339,7 @@
  
        (gl-enable 'scissor-test)
  
-       (for-each (lambda (tree) ((v11n-paint-tree (whole-tree-v11n tree)) tree)) Trees)
+       (for-each touch (map (lambda (tree) (future (lambda () ((v11n-paint-tree (whole-tree-v11n tree)) tree)))) Trees))
  
        (gl-disable 'scissor-test)
        (swap-gl-buffers))))
@@ -652,7 +652,7 @@
 (define (update-childfuncs childfunc)
  (map (curryr set-whole-tree-childfunc! childfunc) (cdr Trees))
  (map (lambda (t) (set-whole-tree-n-tree! t (root->node (node-data (whole-tree-n-tree t)) childfunc (node-laddr (whole-tree-n-tree t))))) (cdr Trees))
- (map generate-utterance-tree (cdr Trees))
+ (for-each touch (map (lambda (t) (future (lambda () (generate-utterance-tree t)))) (cdr Trees)))
  (send Thecanvas on-paint))
 
 (define (add-to-screen root childfunc)
