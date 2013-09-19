@@ -11,7 +11,7 @@
 (require "other2-v11n.ss")
 (require "treemap-v11n.ss")
 
-(provide my-canvas% box-width box-height box-maj-dim node-width node-height node-maj-dim VERTICAL display-on-screen add-to-screen Thecanvas Info Selected-tree utterance-parent utterance-node utterance-args node-data node-laddr whole-tree-selection-u whole-tree-selection set-whole-tree-selection! whole-tree-open set-whole-tree-open! whole-tree-utterance-tree add-key-evs key-evs update-childfuncs set-info enter-insert-mode exit-insert-mode enter-scope-mode exit-scope-mode enter-argify-mode exit-argify-mode enter-search-mode exit-search-mode set-search-results Search-results show-search-tree scroll-search-results remove-search-tree paint-info semantic-go find-utterance-from-laddr-safe for-all-trees)
+(provide my-canvas% box-width box-height box-maj-dim node-width node-height node-maj-dim VERTICAL display-on-screen add-to-screen Thecanvas Info Selected-tree utterance-parent utterance-node utterance-args node-data node-laddr whole-tree-selection-u whole-tree-selection set-whole-tree-selection! whole-tree-open set-whole-tree-open! whole-tree-utterance-tree add-key-evs key-evs update-childfuncs set-info enter-insert-mode exit-insert-mode enter-scope-mode exit-scope-mode enter-argify-mode exit-argify-mode enter-search-mode exit-search-mode enter-paste-mode exit-paste-mode set-search-results Search-results show-search-tree scroll-search-results remove-search-tree paint-info semantic-go find-utterance-from-laddr-safe for-all-trees)
 
 (define WIDTH (* 1 1600))
 (define HEIGHT 899)
@@ -357,6 +357,7 @@
      (SCOPEMODE ((hash-ref key-evs 'scope) event))
      (ARGIFYMODE ((hash-ref key-evs 'argify) event))
      (SEARCHMODE ((hash-ref key-evs 'search) event))
+     (PASTEMODE ((hash-ref key-evs 'paste) event))
      ((hash-has-key? key-evs (send event get-key-code))
       ((hash-ref key-evs (send event get-key-code)) event))
      (#t '())))
@@ -390,6 +391,12 @@
 (define (enter-search-mode) (set! SEARCHMODE #t) (set! Search-tree (add-to-screen (list 0 'list '() '() '() '() '() '()) (whole-tree-childfunc Selected-tree))))
 
 (define (exit-search-mode) (set! SEARCHMODE #f))
+
+(define PASTEMODE #f)
+
+(define (enter-paste-mode) (set! PASTEMODE #t))
+
+(define (exit-paste-mode) (set! PASTEMODE #f))
 
 (define (paint-bar u)
  (with
@@ -597,6 +604,7 @@
 (define (in? dim x y)
  (and (> x (car dim)) (> y (cadr dim)) (< x (+ (car dim) (caddr dim))) (< y (+ (cadr dim) (cadddr dim)))))
 
+; XXX reimplement in terms of addresses?
 (define (utterance-parent u tree)
  (let loop ((root (whole-tree-utterance-tree tree)))
   (if (member u (utterance-args root))
