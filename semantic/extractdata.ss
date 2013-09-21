@@ -511,14 +511,32 @@
     meat
     (let ((env (list 'letrec
                      (map
-                      (lambda (t) (list (string->symbol (format "v~a" (triple-start t))) (let* ((in-id (triple-end (car (graph-neighborhood-edge-forward g (triple-start t) "is defined as"))))
-                                                                                                (is-function-in (graph-neighborhood-edge-forward g (triple-start t) "is function")))
+                      (lambda (t) (list (string->symbol (format "v~a" t)) (let* ((in-id (triple-end (car (graph-neighborhood-edge-forward g t "is defined as"))))
+                                                                                                (is-function-in (graph-neighborhood-edge-forward g t "is function")))
                                                                                           (if (null? is-function-in)
                                                                                            (reify g in-id tracing?)
-                                                                                           (list 'lambda (map (compose string->symbol (curry format "a~s") triple-end) (graph-neighborhood-edge-forward g (triple-start t) "has formal arg")) (reify g in-id tracing?))))))
-                      has-env)
+                                                                                           (list 'lambda (map (compose string->symbol (curry format "a~s") triple-end) (graph-neighborhood-edge-forward g t "has formal arg")) (reify g in-id tracing?))))))
+                      (topo-sort (map triple-start has-env)))
                      meat)))
       env)))))
+
+(define (topo-sort ids)
+ (define traversed '())
+ (with
+  ((displayln "new sort")
+   (displayln "starting stack:")
+   (displayln ids)
+   (reverse (foldl topo '() ids)))
+
+  (topo (id stack)
+   (if (or (member id traversed) (not (member id ids)))
+    stack
+    (begin
+     (set! traversed (cons id traversed))
+     (printf "id:  ~a\tstack:  ~a\ttraversed:  ~a\nhash-val:  ~a\n" id stack traversed (hash-ref free-variables id))
+     (if (null? (hash-ref free-variables id))
+      (cons id stack)
+      (cons id (foldl topo stack (map car (hash-ref free-variables id))))))))))
 
 (define runtime-vals (hash))
 
@@ -818,7 +836,9 @@
    (with
     ((if (hash-has-key? free-variables id)
       '()
-      (set! free-variables (hash-set free-variables id (set-map (set-subtract (list->set (free-from-children)) (list->set (defined-here))) package-up)))))
+      (begin
+       (set! free-variables (hash-set free-variables id '()))
+       (set! free-variables (hash-set free-variables id (set-map (set-subtract (list->set (free-from-children)) (list->set (defined-here))) package-up))))))
 
     (free-from-children ()
      (remove-duplicates
@@ -832,17 +852,21 @@
       (lambda (child) (update-free-variable-id child) (map (lambda (p) (car p)) (hash-ref free-variables child)))
       (append
        (map triple-end (graph-neighborhood-edge-forward G id "has child"))
-       (map triple-start (graph-neighborhood-edge-backward G id "has env")))))
+       (map triple-end (graph-neighborhood-edge-forward G id "is defined as")))))
+;       (map triple-start (graph-neighborhood-edge-backward G id "has env")))))
 
     (get-new-free-variables ()
      (append
       (map triple-start (graph-neighborhood-edge-forward G id "is defined as"))
+;      (map (lambda (child) (update-free-variable-id (triple-end child)) (map car (hash-ref free-variables (triple-end child)))) (graph-neighborhood-edge-forward G id "is defined as"))
       (if (null? (graph-neighborhood-edge-forward G id "is reified as")) '() (list id))))
 
     (defined-here ()
-      (append
-       (map triple-start (graph-neighborhood-edge-backward G id "has env"))
-       (map triple-end (graph-neighborhood-edge-forward G id "has formal arg"))))))))
+     (append
+      (map triple-start (graph-neighborhood-edge-backward G id "has env"))
+;      (map (compose update-free-variable-id triple-start) (graph-neighborhood-edge-backward G id "has env"))
+      (map triple-end (graph-neighborhood-edge-forward G id "has formal arg"))))))))
+;      (map (compose update-free-variable-id triple-end) (graph-neighborhood-edge-forward G id "has formal arg"))))))))
 
 (define (update-bound-variables)
  (with
