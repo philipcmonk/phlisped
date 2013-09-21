@@ -512,10 +512,10 @@
     (let ((env (list 'letrec
                      (map
                       (lambda (t) (list (string->symbol (format "v~a" (triple-start t))) (let* ((in-id (triple-end (car (graph-neighborhood-edge-forward g (triple-start t) "is defined as"))))
-                                                                                            (is-function-in (graph-neighborhood-edge-forward g (triple-start t) "is function")))
-                                                                                      (if (null? is-function-in)
-                                                                                       (reify g in-id tracing?)
-                                                                                       (list 'lambda (map (compose string->symbol (curry format "a~s") triple-end) (graph-neighborhood-edge-forward g (triple-start t) "has formal arg")) (reify g in-id tracing?))))))
+                                                                                                (is-function-in (graph-neighborhood-edge-forward g (triple-start t) "is function")))
+                                                                                          (if (null? is-function-in)
+                                                                                           (reify g in-id tracing?)
+                                                                                           (list 'lambda (map (compose string->symbol (curry format "a~s") triple-end) (graph-neighborhood-edge-forward g (triple-start t) "has formal arg")) (reify g in-id tracing?))))))
                       has-env)
                      meat)))
       env)))))
