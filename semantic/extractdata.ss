@@ -6,7 +6,7 @@
 (provide Thecanvas Info (all-defined-out) update-childfuncs)
 
 (define FILENAME "extractdata.ss")
-(define GRFILE "datafib")
+(define GRFILE "datatreemap")
 
 (define NEWCODE #f)
 
@@ -116,7 +116,7 @@
       (scroll-search-results)
       (show-search-tree get-rep)
       (send Thecanvas on-paint))
-     ((and (char? c) (not (char-whitespace? c)) (not (char-iso-control? c)) (not (member c '(#\( #\) #\[ #\] #\{ #\} #\" #\, #\' #\` #\; #\# #\| #\\))))
+     ((and (char? c) (not (char-whitespace? c)) (not (char-iso-control? c)) (not (member c '(#\( #\) #\[ #\] #\{ #\} #\, #\' #\` #\; #\| #\\))))
       (set! INSERTTEXT (string-append INSERTTEXT (string (send event get-key-code))))
       (show-results))
      ((eq? c #\backspace)
