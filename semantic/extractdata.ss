@@ -1,6 +1,6 @@
 #lang racket
 
-(require "graph.ss" "disp.ss")
+(require "graph.ss" "disp.ss" "compiler.rkt")
 (require racket/set)
 
 (provide Thecanvas Info (all-defined-out) update-childfuncs)
@@ -475,50 +475,50 @@
 
 (define (reify-code event) (display (reify G 0 #f)) (newline))
 
-(define (reify g id tracing?)
- (let ((has-child (graph-neighborhood-edge-forward g id "has child"))
-       (is-written (is-written-t id))
-       (is-defined-as (graph-neighborhood-edge-forward g id "is defined as"))
-       (is-function (graph-neighborhood-edge-forward g id "is function"))
-       (has-env (graph-neighborhood-edge-backward g id "has env"))
-       (is-reified-as (graph-neighborhood-edge-forward g id "is reified as")))
-  (let* ((meat (cond
-                ((not (null? has-child))
-                 (let ((realmeat (map (curry (curryr reify (and tracing? (not (eq? (let ((ress (reify g (triple-end (car has-child)) #f))) (display ress) (newline) ress) 'quote)))) g) (map triple-end has-child))))
-                  (if tracing?
-                   `(begin
-                     (set! stack (cons (quote ,(string->symbol (format "flag~a" id))) stack))
-                     (let ((res ,realmeat)
-                           (childreses '()))
-                      (andmap
-                       (lambda (item) (if (eq? item (quote ,(string->symbol (format "flag~a" id)))) #f (begin (set! childreses (cons item childreses)) #t)))
-                       stack)
-                      (set! h (graph-append-edges h (list (triple ,id 'has-res Next-r) (triple Next-r 'has-val res))))
-                      (set! h (graph-append-edges h (map (curry triple Next-r 'has-roots) childreses)))
-                      (set! stack (drop stack (+ 1 (length childreses))))
-                      (set! stack (cons Next-r stack))
-                      (set! Next-r (- Next-r 1))
-                      res))
-                   realmeat)))
-                ((not (null? is-defined-as))
-                 (string->symbol (format "v~a" id)))
-                ((not (null? is-reified-as))
-                 (triple-end (car is-reified-as)))
-                (is-written
-                 (triple-end is-written))
-                (#t (begin (display "unable to categorize id:  ") (display id) (newline) 'unknown)))))
-   (if (null? has-env)
-    meat
-    (let ((env (list 'letrec
-                     (map
-                      (lambda (t) (list (string->symbol (format "v~a" t)) (let* ((in-id (triple-end (car (graph-neighborhood-edge-forward g t "is defined as"))))
-                                                                                                (is-function-in (graph-neighborhood-edge-forward g t "is function")))
-                                                                                          (if (null? is-function-in)
-                                                                                           (reify g in-id tracing?)
-                                                                                           (list 'lambda (map (compose string->symbol (curry format "a~s") triple-end) (graph-neighborhood-edge-forward g t "has formal arg")) (reify g in-id tracing?))))))
-                      (topo-sort (map triple-start has-env)))
-                     meat)))
-      env)))))
+;(define (reify g id tracing?)
+; (let ((has-child (graph-neighborhood-edge-forward g id "has child"))
+;       (is-written (is-written-t id))
+;       (is-defined-as (graph-neighborhood-edge-forward g id "is defined as"))
+;       (is-function (graph-neighborhood-edge-forward g id "is function"))
+;       (has-env (graph-neighborhood-edge-backward g id "has env"))
+;       (is-reified-as (graph-neighborhood-edge-forward g id "is reified as")))
+;  (let* ((meat (cond
+;                ((not (null? has-child))
+;                 (let ((realmeat (map (curry (curryr reify (and tracing? (not (eq? (let ((ress (reify g (triple-end (car has-child)) #f))) (display ress) (newline) ress) 'quote)))) g) (map triple-end has-child))))
+;                  (if tracing?
+;                   `(begin
+;                     (set! stack (cons (quote ,(string->symbol (format "flag~a" id))) stack))
+;                     (let ((res ,realmeat)
+;                           (childreses '()))
+;                      (andmap
+;                       (lambda (item) (if (eq? item (quote ,(string->symbol (format "flag~a" id)))) #f (begin (set! childreses (cons item childreses)) #t)))
+;                       stack)
+;                      (set! h (graph-append-edges h (list (triple ,id 'has-res Next-r) (triple Next-r 'has-val res))))
+;                      (set! h (graph-append-edges h (map (curry triple Next-r 'has-roots) childreses)))
+;                      (set! stack (drop stack (+ 1 (length childreses))))
+;                      (set! stack (cons Next-r stack))
+;                      (set! Next-r (- Next-r 1))
+;                      res))
+;                   realmeat)))
+;                ((not (null? is-defined-as))
+;                 (string->symbol (format "v~a" id)))
+;                ((not (null? is-reified-as))
+;                 (triple-end (car is-reified-as)))
+;                (is-written
+;                 (triple-end is-written))
+;                (#t (begin (display "unable to categorize id:  ") (display id) (newline) 'unknown)))))
+;   (if (null? has-env)
+;    meat
+;    (let ((env (list 'letrec
+;                     (map
+;                      (lambda (t) (list (string->symbol (format "v~a" t)) (let* ((in-id (triple-end (car (graph-neighborhood-edge-forward g t "is defined as"))))
+;                                                                                                (is-function-in (graph-neighborhood-edge-forward g t "is function")))
+;                                                                                          (if (null? is-function-in)
+;                                                                                           (reify g in-id tracing?)
+;                                                                                           (list 'lambda (map (compose string->symbol (curry format "a~s") triple-end) (graph-neighborhood-edge-forward g t "has formal arg")) (reify g in-id tracing?))))))
+;                      (topo-sort (map triple-start has-env)))
+;                     meat)))
+;      env)))))
 
 (define (topo-sort ids)
  (define traversed '())

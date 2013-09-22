@@ -5,11 +5,11 @@
 (require sgl sgl/gl)
 
 (require "common.ss")
-(require "default-horizontal-v11n.ss")
-(require "default-vertical-v11n.ss")
-(require "other-v11n.ss")
-(require "other2-v11n.ss")
-(require "treemap-v11n.ss")
+;(require "default-horizontal-v11n.ss")
+;(require "default-vertical-v11n.ss")
+;(require "other-v11n.ss")
+;(require "other2-v11n.ss")
+;(require "treemap-v11n.rkt")
 
 (provide my-canvas% box-width box-height box-maj-dim node-width node-height node-maj-dim VERTICAL display-on-screen add-to-screen Thecanvas Info Selected-tree utterance-parent utterance-node utterance-args node-data node-laddr whole-tree-selection-u whole-tree-selection set-whole-tree-selection! whole-tree-open set-whole-tree-open! whole-tree-utterance-tree add-key-evs key-evs update-childfuncs set-info enter-insert-mode exit-insert-mode enter-scope-mode exit-scope-mode enter-argify-mode exit-argify-mode enter-search-mode exit-search-mode enter-paste-mode exit-paste-mode set-search-results Search-results show-search-tree scroll-search-results remove-search-tree paint-info semantic-go find-utterance-from-laddr-safe for-all-trees)
 
@@ -53,6 +53,11 @@
 
 (define win (new frame% (label "vilisp") (min-width WIDTH) (min-height HEIGHT)))
 
+(define-syntax (require-dir syn)
+ (let ((dir (cadr (syntax->datum syn))))
+  (datum->syntax syn `(require ,@(map (lambda (f) (string-append dir "/" f)) (filter (lambda (f) (regexp-match ".rkt$" f)) (map path->string (directory-list dir))))))))
+
+(require-dir "visualizations")
 (define v11ns (list default-horizontal-v11n default-vertical-v11n treemap-v11n other-v11n other2-v11n))
 
 (define (cycle-v11n event)
