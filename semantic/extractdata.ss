@@ -6,7 +6,7 @@
 (provide Thecanvas Info (all-defined-out) update-childfuncs)
 
 (define FILENAME "extractdata.ss")
-(define GRFILE "datatreemap")
+(define GRFILE "visualizations/other2-v11n.phl")
 
 (define NEWCODE #f)
 

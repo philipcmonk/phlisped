@@ -53,9 +53,13 @@
 
 (define win (new frame% (label "vilisp") (min-width WIDTH) (min-height HEIGHT)))
 
+(require (for-syntax racket/system))
 (define-syntax (require-dir syn)
- (let ((dir (cadr (syntax->datum syn))))
-  (datum->syntax syn `(require ,@(map (lambda (f) (string-append dir "/" f)) (filter (lambda (f) (regexp-match ".rkt$" f)) (map path->string (directory-list dir))))))))
+ (let* ((dir (cadr (syntax->datum syn)))
+        (phls (map (lambda (f) (string-append dir "/" f)) (filter (lambda (f) (regexp-match ".phl$" f)) (map path->string (directory-list dir))))))
+  (for-each (lambda (phl) (system* "bin/phlisp" (string-append "-o " (regexp-replace ".phl$" phl ".rkt")) phl)) phls)
+  (let ((rkts (map (lambda (f) (string-append dir "/" f)) (filter (lambda (f) (regexp-match ".rkt$" f)) (map path->string (directory-list dir))))))
+   (datum->syntax syn `(require ,@rkts)))))
 
 (require-dir "visualizations")
 (define v11ns (list default-horizontal-v11n default-vertical-v11n treemap-v11n other-v11n other2-v11n))
