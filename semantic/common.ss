@@ -116,3 +116,12 @@
 (define (maj-dim x y) (if VERTICAL y x))
 (define (min-dim x y) (if VERTICAL x y))
 
+(define (center offset lenwhole lenpiece start width)
+ (let ((visible-width (- (min (+ offset lenwhole) (+ start width)) (max offset start))))
+  (if (< visible-width lenpiece)
+   (if (< offset start)
+    (- (+ offset lenwhole) lenpiece)
+    offset)
+   (+ (max offset start) (/ visible-width 2) (- (/ lenpiece 2))))))
+
+
