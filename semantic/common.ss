@@ -7,6 +7,7 @@
 (define-ffi-definer define-ftgl (ffi-lib "libftgl"))
 
 (define _FTGLfont (_cpointer 'FTGLfont))
+(define _GLuint _uint)
 (define-ftgl ftglCreatePixmapFont (_fun _path -> _FTGLfont))
 (define-ftgl ftglCreateBitmapFont (_fun _path -> _FTGLfont))
 (define-ftgl ftglCreateBufferFont (_fun _path -> _FTGLfont))
@@ -19,6 +20,11 @@
 (define-ftgl ftglGetFontAdvance (_fun _FTGLfont _string -> _float))
 (define-ftgl ftglRenderFont (_fun _FTGLfont _string _int -> _void))
 (define-ftgl ftglDestroyFont (_fun _FTGLfont -> _void))
+
+(define-ffi-definer define-soil (ffi-lib "libsoil"))
+
+(define-soil SOIL_load_OGL_texture (_fun _path _int _uint _uint -> _uint))
+(define-soil SOIL_last_result (_fun -> _string))
 
 (provide (all-defined-out))
 
@@ -79,16 +85,16 @@
  (gl-color (/ (car clr) 255) (/ (cadr clr) 255) (/ (caddr clr) 255))
 
  (gl-begin 'quads)
- (gl-vertex x (- y))
- (gl-vertex (+ x w) (- y))
- (gl-vertex (+ x w) (- (+ y h)))
- (gl-vertex x (- (+ y h)))
+ (gl-vertex x (- y) -1.01)
+ (gl-vertex (+ x w) (- y) -1.01)
+ (gl-vertex (+ x w) (- (+ y h)) -1.01)
+ (gl-vertex x (- (+ y h)) -1.01)
  (gl-end))
 
 (define (draw-text text x y clr (tree '()))
  (gl-color (/ (car clr) 255) (/ (cadr clr) 255) (/ (caddr clr) 255))
  (gl-push-matrix)
- (gl-translate x (- y) 0)
+ (gl-translate x (- y) -1.01)
  (ftglRenderFont Font text 65535)
  (gl-pop-matrix))
 

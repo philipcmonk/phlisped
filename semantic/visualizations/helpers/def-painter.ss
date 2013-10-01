@@ -12,31 +12,87 @@
   (> x (- (/ (whole-tree-w tree) (whole-tree-zoom tree)) (whole-tree-offset-x tree)))
   (> y (- (/ (whole-tree-h tree) (whole-tree-zoom tree)) (whole-tree-offset-y tree)))))
 
-(define (center offset lenwhole lenpiece start width)
- (let ((visible-width (- (min (+ offset lenwhole) (+ start width)) (max offset start))))
-  (if (< visible-width lenpiece)
-   (if (< offset start)
-    (- (+ offset lenwhole) lenpiece)
-    offset)
-   (+ (max offset start) (/ visible-width 2) (- (/ lenpiece 2))))))
+;(define (center offset lenwhole lenpiece start width)
+; (let ((visible-width (- (min (+ offset lenwhole) (+ start width)) (max offset start))))
+;  (if (< visible-width lenpiece)
+;   (if (< offset start)
+;    (- (+ offset lenwhole) lenpiece)
+;    offset)
+;   (+ (max offset start) (/ visible-width 2) (- (/ lenpiece 2))))))
+
+(define image-dir "/home/philip/olddesktop/vilisp/vilisp/semantic/images/")
 
 (define (def-painter #:drawer (drawer values) #:invisible? (invisible? inv?))
+ (define image '())
+ (define images '())
+ (define repetitions 1000)
+ (define image-files '("galaxies.png"))
+; (define image-files '("360milky_way_over_tenerife.jpg"))
+; (define image-files (map (lambda (n) (string-append "time/" (number->string n) ".png")) (build-list 1000 (curry + 1))))
+ (define images-n (length image-files))
+ (define images-dimensions (make-list images-n (map string->number (string-split (with-output-to-string (lambda () (system* "/usr/bin/identify" "-format" "%w %h" (string-append image-dir (car image-files)))))))))
+; (define images-dimensions (map
+;                            (lambda (img-n)
+;                             (map string->number (string-split (with-output-to-string (lambda () (system* "/usr/bin/identify" "-format" "%w %h" (string-append image-dir "time/" (number->string img-n) ".png")))))))
+;                            (build-list n (curry + 1))))
  (lambda (tree)
   (with
-   ((apply gl-scissor (whole-tree-dim tree))
+   (
+    (if (null? images)
+     (begin
+      (glPixelStorei GL_UNPACK_ALIGNMENT 1)
+      (map (lambda (img-f)
+            (set! images (cons (SOIL_load_OGL_texture (string-append image-dir img-f) 0 0 4) images)))
+           image-files)
+      (set! images (reverse images)))
+     '())
+    (apply gl-scissor (whole-tree-dim tree))
     (apply gl-viewport (whole-tree-dim tree))
+
+    (define distance 10)
+
     (gl-matrix-mode 'projection)
     (gl-load-identity)
-    (gl-ortho
-     (- (whole-tree-offset-x tree))
-     (+ (- (whole-tree-offset-x tree)) (/ (whole-tree-w tree) (whole-tree-zoom tree)))
-     (+ (whole-tree-offset-y tree) (- (/ (whole-tree-h tree) (whole-tree-zoom tree))))
-     (whole-tree-offset-y tree)
-     -1.0
-     1.0)
+    (gl-frustum
+     0
+     (whole-tree-w tree)
+     (- (whole-tree-h tree))
+     0
+     1
+     (* 10 distance))
+    (gl-translate (whole-tree-offset-x tree) (- (whole-tree-offset-y tree)) (- 1 (/ (whole-tree-zoom tree))))
     (gl-matrix-mode 'modelview)
     (gl-load-identity)
-    (utterance-paint (whole-tree-utterance-tree tree) tree))
+
+    (glEnable GL_TEXTURE_2D)
+    (gl-clear 'color-buffer-bit)
+
+    (foldl
+     (lambda (img img-d d)
+      (let* ((x (car d))
+             (next-x (* distance (+ x (* repetitions (car img-d)))))
+             (y (cdr d))
+             (next-y (* distance (- (+ y (cadr img-d))))))
+       (glBindTexture GL_TEXTURE_2D img)
+       (gl-begin 'quads)
+       (gl-tex-coord 0 0)
+       (gl-vertex x (- y) (- distance))
+       (gl-tex-coord repetitions 0)
+       (gl-vertex next-x (- y) (- distance))
+       (gl-tex-coord repetitions 1)
+       (gl-vertex next-x  (- distance))
+       (gl-tex-coord 0 1)
+       (gl-vertex x next-y (- distance))
+       (gl-end)
+       (if (> x 50000) (cons 0 next-y) (cons next-x y))))
+     '(0 . 0)
+     images
+     images-dimensions)
+
+    (glDisable GL_TEXTURE_2D)
+
+    (utterance-paint (whole-tree-utterance-tree tree) tree)
+    )
 
    (utterance-paint (u tree)
     (let* ((text ((node-text-func (utterance-node u)) (utterance-node u)))

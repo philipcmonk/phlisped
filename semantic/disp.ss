@@ -348,7 +348,7 @@
  
        (gl-enable 'scissor-test)
  
-       (for-each touch (map (lambda (tree) (future (lambda () ((v11n-paint-tree (whole-tree-v11n tree)) tree)))) Trees))
+       (for-each (lambda (tree) ((v11n-paint-tree (whole-tree-v11n tree)) tree)) Trees)
  
        (gl-disable 'scissor-test)
        (swap-gl-buffers))))
