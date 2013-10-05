@@ -4,9 +4,9 @@
 (require "../common.ss")
 (require "helpers/linear-vertical-v11n.ss")
 
-(provide other-v11n)
+(provide visualization)
 
-(define other-v11n
+(define visualization
  (make-linear-vertical-v11n
   #:rectangle-drawer
    (lambda (clr x y w h tree)

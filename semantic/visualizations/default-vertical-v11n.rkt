@@ -4,9 +4,9 @@
 (require "../common.ss")
 (require "helpers/default-v11n.ss")
 
-(provide default-vertical-v11n)
+(provide visualization)
 
-(define default-vertical-v11n
+(define visualization
  (make-default-v11n
   #:child-w-generator (lambda (n) (foldl max 0 (map (lambda (arg) (box-width ((node-text-func arg) arg))) (node-args n))))
   #:child-x-generator (lambda (data w n) (+ (car data) (if (zero? w) (box-width ((node-text-func n) n)) w)))

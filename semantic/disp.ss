@@ -5,11 +5,6 @@
 (require sgl sgl/gl)
 
 (require "common.ss")
-;(require "default-horizontal-v11n.ss")
-;(require "default-vertical-v11n.ss")
-;(require "other-v11n.ss")
-;(require "other2-v11n.ss")
-;(require "treemap-v11n.rkt")
 
 (provide my-canvas% box-width box-height box-maj-dim node-width node-height node-maj-dim VERTICAL display-on-screen add-to-screen Thecanvas Info Selected-tree utterance-parent utterance-node utterance-args node-data node-laddr whole-tree-selection-u whole-tree-selection set-whole-tree-selection! whole-tree-open set-whole-tree-open! whole-tree-utterance-tree add-key-evs key-evs update-childfuncs set-info enter-insert-mode exit-insert-mode enter-scope-mode exit-scope-mode enter-argify-mode exit-argify-mode enter-search-mode exit-search-mode enter-paste-mode exit-paste-mode set-search-results Search-results show-search-tree scroll-search-results remove-search-tree paint-info semantic-go find-utterance-from-laddr-safe for-all-trees)
 
@@ -58,18 +53,21 @@
  (let* ((dir (cadr (syntax->datum syn)))
         (phls (map (lambda (f) (string-append dir "/" f)) (filter (lambda (f) (regexp-match ".phl$" f)) (map path->string (directory-list dir))))))
   (for-each (lambda (phl) (system* "bin/phlisp" (string-append "-o " (regexp-replace ".phl$" phl ".rkt")) phl)) phls)
-  (let ((rkts (map (lambda (f) (string-append dir "/" f)) (filter (lambda (f) (regexp-match ".rkt$" f)) (map path->string (directory-list dir))))))
-   (datum->syntax syn `(require ,@rkts)))))
+  (let* ((rkts (map (lambda (f) (string-append dir "/" f)) (filter (lambda (f) (regexp-match ".rkt$" f)) (map path->string (directory-list dir)))))
+         (rkts2 (map (lambda (rkt) `(prefix-in ,(string->symbol (string-append "v11n-" rkt ":")) ,rkt)) rkts))
+	 (regs (map (lambda (rkt) (string->symbol (string-append "v11n-" rkt ":visualization"))) rkts)))
+   (datum->syntax syn `(begin
+			(require ,@rkts2)
+			(define v11ns (list ,@regs)))))))
 
 (require-dir "visualizations")
-(define v11ns (list default-horizontal-v11n default-vertical-v11n treemap-v11n other-v11n other2-v11n))
 
 (define (cycle-v11n event)
  (set-whole-tree-v11n! Selected-tree
   (let* ((cur (whole-tree-v11n Selected-tree))
          (tail (member cur v11ns)))
    (if (or (null? tail) (null? (cdr tail)))
-    (car v11ns)
+    (cadddr v11ns)
     (cadr tail))))
  (generate-utterance-tree Selected-tree)
  (send Thecanvas on-paint))
@@ -78,11 +76,11 @@
                (apply whole-tree 
                       (let* ((dummy-n (node '(0 'dummy "dummy" () () () () ()) '() (delay '()) (lambda (_) "t")))
                              (dummy-utterance (utterance dummy-n 0 0 0 0 0 0 '() (cons '(0 0 0) '(0 0 0)))))
-                       (list dummy-n (lambda (a) '()) dummy-utterance (set) '() 0 0 0 0 default-horizontal-v11n 0 0 1)))
+                       (list dummy-n (lambda (a) '()) dummy-utterance (set) '() 0 0 0 0 (cadddr v11ns) 0 0 1)))
                (apply whole-tree 
                       (let* ((dummy-n (node '(0 'dummy-bar "dummy bar" () () () () ()) '() (delay '()) (lambda (_) "r")))
                              (dummy-utterance (utterance dummy-n 0 0 0 0 0 0 '() (cons '(0 0 0) '(0 0 0)))))
-                       (list dummy-n (lambda (a) '()) dummy-utterance (set) '() 800 30 (- WIDTH 600) 300 other-v11n 0 0 1)))))
+                       (list dummy-n (lambda (a) '()) dummy-utterance (set) '() 800 30 (- WIDTH 600) 300 (caddr v11ns) 0 0 1)))))
 (set-selected-tree (cadr Trees))
 (define Bar-tree (cadr Trees))
 
@@ -703,11 +701,11 @@
     y
     w
     h
-    default-horizontal-v11n
+    (cadddr v11ns)
     0
     0
     1))))
- (set-whole-tree-utterance-tree! tree ((v11n-node->v11n-utterance default-horizontal-v11n) (whole-tree-n-tree tree) 0 0 0 0 '() tree))
+ (set-whole-tree-utterance-tree! tree ((v11n-node->v11n-utterance (cadddr v11ns)) (whole-tree-n-tree tree) 0 0 0 0 '() tree))
  (set-whole-tree-selection! tree '())
  (set! Trees (append Trees (list tree)))
  tree))

@@ -4,9 +4,9 @@
 (require "../common.ss")
 (require "helpers/default-v11n.ss")
 
-(provide default-horizontal-v11n)
+(provide visualization)
 
-(define default-horizontal-v11n
+(define visualization
  (make-default-v11n
   #:child-w-generator (lambda (n) -1)
   #:child-x-generator (lambda (data w n) (car data))
