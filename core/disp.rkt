@@ -482,10 +482,6 @@
   '())
  (gl-disable 'scissor-test))
 
-
-;(define (whole-tree-dim tree)
-; (list (whole-tree-x tree) (whole-tree-y tree) (whole-tree-w tree) (whole-tree-h tree)))
-
 (define (in? dim x y)
  (and (> x (car dim)) (> y (cadr dim)) (< x (+ (car dim) (caddr dim))) (< y (+ (cadr dim) (cadddr dim)))))
 
