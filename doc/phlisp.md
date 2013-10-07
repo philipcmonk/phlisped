@@ -13,7 +13,7 @@ Additionally, functions are defined in a manner very similar to variables.  The 
 The Graph
 ---------
 
-All nodes in the graph are distinguishable.  A node must be exactly one of the following:
+All nodes in the graph are distinguishable.  All edges are assumed unordered unless explicitly specified as ordered.  A node must be exactly one of the following:
 
 - a parent of one or more nodes
 - a variable defined as another node
@@ -22,11 +22,11 @@ All nodes in the graph are distinguishable.  A node must be exactly one of the f
 
 ### Parent Nodes
 
-Parent nodes must have one or more forward edges to a parent, variable, or terminal node labeled `has-child`.  They may have one or more forward edges to variable nodes labeled `is-environment-of`.  Additionally, they may have a forward edge to a string labeled `has-name`.
+Parent nodes must have one or more ordered forward edges to a parent, variable, or terminal node labeled `has-child`.  They may have one or more forward edges to variable nodes labeled `is-environment-of`.  Additionally, they may have a forward edge to a string labeled `has-name`.
 
 ### Variable Nodes
 
-Variable nodes have exactly one forward edge to a parent, variable, terminal, or argument node labeled `is-defined-as`.  Additionally, they may have a forward edge to a string labeled `has-name`.  They may have a forward edge to `-1` labeled `is-function`.  If so, then we call it a function node, and it may have one or more forward edges to an argument node labeled `has-formal-arg`.
+Variable nodes have exactly one forward edge to a parent, variable, terminal, or argument node labeled `is-defined-as`.  Additionally, they may have a forward edge to a string labeled `has-name`.  They may have a forward edge to `-1` labeled `is-function`.  If so, then we call it a function node, and it may have one or more ordered forward edges to an argument node labeled `has-formal-arg`.
 
 ### Argument Nodes
 
@@ -35,3 +35,14 @@ Argument nodes have exactly one forward edge to `-1` labeled `is-formal-arg`.  A
 ### Terminal Nodes
 
 Terminal nodes must have a forward edge to a string labeled `has-name`.
+
+Compilation
+-----------
+
+The compilation of any node is dependent only on the lexical children of that node.  Compilation follows the following algorithm.
+
+Define `c(n)` such that if `n` is a:
+
+- variable node, then if `id` is a unique symbol associated with `n`, yield `id`.
+- terminal node, then if `n` has forward edge to `name` labeled `has-name`, yield `name`.
+- parent node, then if `n` has `r` child nodes labeled `child1 child2 ... childr` and `s` edges labeled `is-environment-of` with ends `var1 var2 ... vars` with unique associated symbols `id1 id2 .. ids`,  yield `(letrec ((id1 var1) (id2 var2) ... (ids vars)) (c(child1) c(child2) ... c(childs)))`.  Note that since `is-environment-of` is unordered, to get the ordering, we topologically sort the ends such that if the definition of `varp` references `varq` in any place other than a function definition, then `varp` precedes `varq`.
