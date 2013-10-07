@@ -2,7 +2,7 @@
 
 (require "../core/common.rkt")
 (require (except-in "../core/extractdata.rkt" with))
-(require "../core/graph.rkt")
+(require "../core/gnode.rkt")
 
 (provide data)
 

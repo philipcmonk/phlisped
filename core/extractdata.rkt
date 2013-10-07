@@ -1,11 +1,11 @@
 #lang racket
 
-(require "graph.rkt" "disp.rkt" "compiler.rkt")
+(require "gnode.rkt" "graph.rkt" "disp.rkt" "compiler.rkt")
 (require racket/set)
 
 (provide Thecanvas Info (all-defined-out) update-childfuncs for-all-trees semantic-go)
 
-(define GRFILE "visualizations/treemap-v11n.phl")
+(define GRFILE "tests/testdata.phl")
 
 (define NEWCODE #f)
 
@@ -39,7 +39,7 @@
 (define runtime-vals (hash))
 (define (set-runtime-vals vals) (set! runtime-vals vals))
 
-(set! Next-id (triple-end (car (graph-neighborhood-edge-forward G 'next-id "is"))))
+(set! Next-id (hash-ref G 'next-id))
 (define (set-Next-id id) (set! Next-id id))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -118,23 +118,23 @@
 ;;;                            Little '-t' Getters                          ;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(define (is-written-t id)
- (let ((nbhd (graph-neighborhood-edge-forward G id "is written")))
-  (if (null? nbhd)
-   #f
-   (car nbhd))))
-
-(define (is-func-t id)
- (let ((nbhd (graph-neighborhood-edge-forward G id "is function")))
-  (if (null? nbhd)
-   #f
-   (car nbhd))))
-
-(define (is-named-t id)
- (let ((nbhd (graph-neighborhood-edge-forward G id "is named")))
-  (if (null? nbhd)
-   #f
-   (car nbhd))))
+;(define (is-written-t id)
+; (let ((nbhd (graph-neighborhood-edge-forward G id "is written")))
+;  (if (null? nbhd)
+;   #f
+;   (car nbhd))))
+;
+;(define (is-func-t id)
+; (let ((nbhd (graph-neighborhood-edge-forward G id "is function")))
+;  (if (null? nbhd)
+;   #f
+;   (car nbhd))))
+;
+;(define (is-named-t id)
+; (let ((nbhd (graph-neighborhood-edge-forward G id "is named")))
+;  (if (null? nbhd)
+;   #f
+;   (car nbhd))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;                             Utility Functions                           ;;;
@@ -148,15 +148,21 @@
 
 (define (common-ancestor id1 id2)
  (with
-  ((find-first-overlap (ancestors id1 (list id1)) (ancestors id2 (list id2))))
+  ((find-first-overlap (ancestors id1) (ancestors id2)))
 
-  (ancestors (id l)
-   (let* ((has-child (graph-neighborhood-edge-backward G id "has child"))
-          (has-env (graph-neighborhood-edge-forward G id "has env"))
-          (has-parent (if (null? has-child) has-env has-child)))
-    (if (null? has-parent)
-     l
-     (ancestors (triple-start (car has-parent)) (append l (list (triple-start (car has-parent))))))))
+  (ancestors (id)
+   (let loop ((cur 0) (l '()))
+    (if (= id cur)
+     (cons cur l)
+     (ormap
+      (curryr loop (cons cur l))
+      (lexical-children id)))))
+;   (let* ((has-child (graph-neighborhood-edge-backward G id "has child"))
+;          (has-env (graph-neighborhood-edge-forward G id "has env"))
+;          (has-parent (if (null? has-child) has-env has-child)))
+;    (if (null? has-parent)
+;     l
+;     (ancestors (triple-start (car has-parent)) (append l (list (triple-start (car has-parent))))))))
 
   (find-first-overlap (l1 l2)
    (if (null? l1)
@@ -167,21 +173,29 @@
 
 (define (graph-ids g) (hash-keys G))
 
-(define (lexical-parent id)
- (let ((is-defined-as (graph-neighborhood-edge-backward G id "is defined as"))
-       (has-child (graph-neighborhood-edge-backward G id "has child"))
-       (has-env (graph-neighborhood-edge-forward G id "has env")))
+(define (lexical-children id)
+ (let ((gn (hash-ref G id)))
   (cond
-   ((not (null? is-defined-as))
-    (triple-end (car (graph-neighborhood-edge-forward G (triple-start (car is-defined-as)) "has env"))))
-   ((not (null? has-env))
-    (triple-end (car has-env)))
-   ((not (null? has-child))
-    (triple-start (car has-child)))
+   ((parent-gnode? gn) (append (parent-gnode-childs gn) (map (compose variable-gnode-defined (curry hash-ref G)) (parent-gnode-vars gn))))
+;   ((variable-gnode? gn) (variable-gnode-defined gn))
    (#t '()))))
 
+;(define (lexical-parent id)
+; (let ((is-defined-as (graph-neighborhood-edge-backward G id "is defined as"))
+;       (has-child (graph-neighborhood-edge-backward G id "has child"))
+;       (has-env (graph-neighborhood-edge-forward G id "has env")))
+;  (cond
+;   ((not (null? is-defined-as))
+;    (triple-end (car (graph-neighborhood-edge-forward G (triple-start (car is-defined-as)) "has env"))))
+;   ((not (null? has-env))
+;    (triple-end (car has-env)))
+;   ((not (null? has-child))
+;    (triple-start (car has-child)))
+;   (#t '()))))
+
 (define (graph->file g)
- (let ((g (graph-replace-edges G (car (graph-neighborhood-edge-forward g 'next-id "is")) (list (triple 'next-id "is" Next-id)))))
+ (let ((g (hash-set g 'next-id Next-id)))
+; (let ((g (graph-replace-edges g (car (graph-neighborhood-edge-forward g 'next-id "is")) (list (triple 'next-id "is" Next-id)))))
   (call-with-output-file GRFILE #:exists 'truncate (lambda (f) (write g f)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -214,18 +228,25 @@
  
 (define (child-fun a)
  (map
-  (compose get-rep triple-end)
-  (append
-   (graph-neighborhood-edge-forward G (car a) "has child")
-   (graph-neighborhood-edge-forward G (car a) "is defined as")
-   (graph-neighborhood-edge-forward G (car a) "has formal arg"))))
+  get-rep
+  (let ((gn (hash-ref G (car a))))
+   (cond
+    ((parent-gnode? gn) (parent-gnode-childs gn))
+    ((function-gnode? gn) (append (list (variable-gnode-defined gn)) (function-gnode-args gn)))
+    ((variable-gnode? gn) (list (variable-gnode-defined gn)))
+    (#t '())))))
+;  (append
+;   (graph-neighborhood-edge-forward G (car a) "has child")
+;   (graph-neighborhood-edge-forward G (car a) "is defined as")
+;   (graph-neighborhood-edge-forward G (car a) "has formal arg"))))
 
 (define (get-rep id)
  (with
-  ((append (list id) (get-written id) (list (nei) (get-free-variables) (get-bound-variables) (lex-par) (runtime-values))))
+  ((append (list id) (get-written id) (list (nei) (get-free-variables) (get-bound-variables) (lex-chi) (runtime-values))))
 
   (nei ()
-   (map triple->list (append (graph-neighborhood-forward G id) (graph-neighborhood-backward G id))))
+   '(to be implemented))
+;   (map triple->list (append (graph-neighborhood-forward G id) (graph-neighborhood-backward G id))))
 
   (get-free-variables ()
    (hash-ref free-variables id))
@@ -233,9 +254,10 @@
   (get-bound-variables ()
    (hash-ref bound-variables id))
 
-  (lex-par ()
-   (let ((parent (lexical-parent id)))
-    (cons parent (cadr (get-written parent)))))
+  (lex-chi ()
+   (lexical-children id))
+;   (let ((child (lexical-children id)))
+;    (cons child (cadr (get-written child)))))
   
   (runtime-values ()
    (let* ((reses (map
@@ -263,28 +285,25 @@
   (car l)))
 
 (define (get-written id)
- (let ((is-func (is-func-t id))
-       (is-named (is-named-t id)))
-  (if is-func
-   (if is-named
-    (list 'scoped (triple-end is-named))
-    (list 'scoped '---))
-   (let ((has-child (graph-neighborhood-edge-forward G id "has child"))
-         (is-written (is-written-t id))
-         (is-defined-as (graph-neighborhood-edge-forward G id "is defined as")))
-    (if (not (null? has-child))
-     (if is-named
-      (list 'list (triple-end is-named))
-      (if is-written
-       (list 'list (triple-end is-written))
-       (list 'list '-)))
-     (if is-written
-      (list 'terminal (triple-end is-written))
-      (if (not (null? is-defined-as))
-       (if is-named
-        (list 'var (triple-end is-named))
-        (list 'var '--))
-       (list 'unknown 'unknown))))))))
+ (let* ((gn (hash-ref G id)))
+  (cond
+   ((function-gnode? gn) (list 'scoped (gnode-name gn)))
+   ((parent-gnode? gn) (list 'list (gnode-name gn)))
+   ((terminal-gnode? gn) (list 'terminal (gnode-name gn)))
+   ((variable-gnode? gn) (list 'var (gnode-name gn)))
+   ((argument-gnode? gn) (list 'arg (gnode-name gn)))
+   (#t 'unknown 'unknown))))
+;   (let ((is-written (is-written-t id))
+;         (is-defined-as (graph-neighborhood-edge-forward G id "is defined as")))
+;    (if (parent-gnode? gn)
+;     (list 'list (gnode-name gn))
+;     (if is-written
+;      (list 'terminal (triple-end is-written))
+;      (if (not (null? is-defined-as))
+;       (if is-named
+;        (list 'var (triple-end is-named))
+;        (list 'var '--))
+;       (list 'unknown 'unknown))))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;                                                                   Updating and Related                                                                  ;;;
@@ -309,59 +328,68 @@
     (graph-ids G)))
 
   (update-free-variable-id (id)
-   (with
-    ((if (hash-has-key? free-variables id)
-      '()
-      (begin
-       (set! free-variables (hash-set free-variables id '()))
-       (set! free-variables (hash-set free-variables id (set-map (set-subtract (list->set (free-from-children)) (list->set (defined-here))) package-up))))))
+   (let ((gn (hash-ref G id)))
+    (with
+     ((if (hash-has-key? free-variables id)
+       '()
+       (begin
+        (set! free-variables (hash-set free-variables id '()))
+        (set! free-variables (hash-set free-variables id (set-map (set-subtract (list->set (free-from-children)) (list->set (defined-here))) package-up))))))
 
-    (free-from-children ()
-     (remove-duplicates
-      (flatten
-       (append
-        (get-free-variables-from-children)
-        (get-new-free-variables)))))
+     (free-from-children ()
+      (remove-duplicates
+       (flatten
+        (append
+         (get-free-variables-from-children)
+         (get-new-free-variables)))))
 
-    (get-free-variables-from-children ()
-     (map
-      (lambda (child) (update-free-variable-id child) (map (lambda (p) (car p)) (hash-ref free-variables child)))
-      (append
-       (map triple-end (graph-neighborhood-edge-forward G id "has child"))
-       (map triple-end (graph-neighborhood-edge-forward G id "is defined as")))))
-;       (map triple-start (graph-neighborhood-edge-backward G id "has env")))))
+     (get-free-variables-from-children ()
+      (map
+       (lambda (child) (update-free-variable-id child) (map (lambda (p) (car p)) (hash-ref free-variables child)))
+       (cond
+        ((parent-gnode? gn) (parent-gnode-childs gn))
+	((variable-gnode? gn) (list (variable-gnode-defined gn)))
+	(#t '()))))
+;       (append
+;        (map triple-end (graph-neighborhood-edge-forward G id "has child"))
+;        (map triple-end (graph-neighborhood-edge-forward G id "is defined as")))))
+;;        (map triple-start (graph-neighborhood-edge-backward G id "has env")))))
 
-    (get-new-free-variables ()
-     (append
-      (map triple-start (graph-neighborhood-edge-forward G id "is defined as"))
-;      (map (lambda (child) (update-free-variable-id (triple-end child)) (map car (hash-ref free-variables (triple-end child)))) (graph-neighborhood-edge-forward G id "is defined as"))
-      (if (null? (graph-neighborhood-edge-forward G id "is reified as")) '() (list id))))
+     (get-new-free-variables ()
+      (if (or (variable-gnode? gn) (argument-gnode? gn))
+       (list id)
+       '()))
+;      (append
+;       (map triple-start (graph-neighborhood-edge-forward G id "is defined as"))
+;;       (map (lambda (child) (update-free-variable-id (triple-end child)) (map car (hash-ref free-variables (triple-end child)))) (graph-neighborhood-edge-forward G id "is defined as"))
+;       (if (null? (graph-neighborhood-edge-forward G id "is reified as")) '() (list id))))
 
-    (defined-here ()
-     (append
-      (map triple-start (graph-neighborhood-edge-backward G id "has env"))
-;      (map (compose update-free-variable-id triple-start) (graph-neighborhood-edge-backward G id "has env"))
-      (map triple-end (graph-neighborhood-edge-forward G id "has formal arg"))))))))
-;      (map (compose update-free-variable-id triple-end) (graph-neighborhood-edge-forward G id "has formal arg"))))))))
+     (defined-here ()
+      (cond
+       ((parent-gnode? gn) (parent-gnode-vars gn))
+       ((function-gnode? gn) (function-gnode-args gn))
+       (#t '()))))))))
+;      (append
+;       (map triple-start (graph-neighborhood-edge-backward G id "has env"))
+;;       (map (compose update-free-variable-id triple-start) (graph-neighborhood-edge-backward G id "has env"))
+;       (map triple-end (graph-neighborhood-edge-forward G id "has formal arg"))))))))
+;;       (map (compose update-free-variable-id triple-end) (graph-neighborhood-edge-forward G id "has formal arg"))))))))
 
 (define (update-bound-variables)
- (with
-  ((for-each
-    update-bound-variable-id
-    (graph-ids G)))
+ (let update-bound-variable-id ((id 0) (from-above '()))
+  (let* ((gn (hash-ref G id))
+         (bound (append from-above (if (parent-gnode? gn) (parent-gnode-vars gn) '()) (if (function-gnode? gn) (function-gnode-args gn) '()))))
+   (for-each (curryr update-bound-variable-id bound) (lexical-children id))
+   (if (hash-has-key? bound-variables id)
+    '()
+     (set! bound-variables (hash-set bound-variables id (map package-up from-above)))))))
 
-  (update-bound-variable-id (id)
-   (with
-    ((if (hash-has-key? bound-variables id)
-      '()
-       (set! bound-variables (hash-set bound-variables id (map package-up (bound-from-parent))))))
-
-    (bound-from-parent ()
-     (let ((parent (lexical-parent id)))
-      (append
-       (if (null? parent) '() (begin (update-bound-variable-id parent) (map (lambda (p) (car p)) (hash-ref bound-variables parent))))
-       (map triple-start (graph-neighborhood-edge-backward G id "has env"))
-       (map triple-end (graph-neighborhood-edge-forward G parent "has formal arg")))))))))
+;    (bound-from-parent ()
+;     (let ((parent (lexical-parent id)))
+;      (append
+;       (if (null? parent) '() (begin (update-bound-variable-id parent) (map (lambda (p) (car p)) (hash-ref bound-variables parent))))
+;       (map triple-start (graph-neighborhood-edge-backward G id "has env"))
+;       (map triple-end (graph-neighborhood-edge-forward G parent "has formal arg")))))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;                                                                           Go                                                                            ;;;

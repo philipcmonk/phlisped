@@ -30,7 +30,7 @@ Variable nodes have exactly one forward edge to a parent, variable, terminal, or
 
 ### Argument Nodes
 
-Argument nodes have exactly one forward edge to `-1` labeled `is-formal-arg`.  Additionally, the may have a forward edge to a string labeled `has-name`.
+Argument nodes must have exactly one forward edge to `-1` labeled `is-formal-arg`.  Additionally, the may have a forward edge to a string labeled `has-name`.
 
 ### Terminal Nodes
 

@@ -27,8 +27,8 @@
  (define images '())
  (define repetitions 1)
 ; (define image-files '("galaxies.png"))
-; (define image-files '("360milky_way_over_tenerife.jpg"))
- (define image-files (map (lambda (n) (string-append "time/" (number->string n) ".png")) (build-list 100 (curry + 1))))
+ (define image-files '("360milky_way_over_tenerife.jpg"))
+; (define image-files (map (lambda (n) (string-append "time/" (number->string n) ".png")) (build-list 100 (curry + 1))))
  (define images-n (length image-files))
  (define images-dimensions (make-list images-n (map string->number (string-split (with-output-to-string (lambda () (system* "/usr/bin/identify" "-format" "%w %h" (string-append image-dir (car image-files)))))))))
 ; (define images-dimensions (map

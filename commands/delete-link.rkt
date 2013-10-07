@@ -2,24 +2,21 @@
 
 (require "../core/common.rkt")
 (require (except-in "../core/extractdata.rkt" with))
-(require "../core/graph.rkt")
+(require "../core/gnode.rkt")
 
 (provide data)
 
 (define (delete-link event)
  (let* ((id (selected-id Selected-tree))
-        (parent-id (selected-parent-id Selected-tree))
-        (child (member (triple parent-id "has child" id) (graph-neighborhood-forward G parent-id))))
+        (parent-id (selected-parent-id Selected-tree)))
   (with
-   ((if (not child)
+   ((if (not (member id (parent-gnode-childs (hash-ref G parent-id))))
      '()
      (updater
       #:graph-changer (lambda ()
-                       (cond
-                         (child
-                           (push-clipboard (triple-end (car child)))
-                           (set-G (graph-remove-edge G (car child))))
-                         (#t '())))
+                       (let ((pgn (hash-ref G parent-id)))
+                        (push-clipboard id)
+                        (set-G (hash-set G parent-id (parent-gnode parent-id (gnode-name pgn) (remove id (parent-gnode-childs pgn)) (parent-gnode-vars pgn))))))
       #:open-updater  (lambda ()
                        (update-open)
                        (update-selection)))))

@@ -2,7 +2,7 @@
 
 (require "../core/common.rkt")
 (require (except-in "../core/extractdata.rkt" with))
-(require "../core/graph.rkt")
+(require "../core/gnode.rkt")
 (require "../core/disp.rkt")
 
 (provide data)
@@ -32,10 +32,12 @@
      (#t '()))))
 
   (make-paste (parent-id child-id)
-   (if (member (triple parent-id "has child" child-id) (graph-neighborhood-forward G parent-id))
+   (if (member child-id (parent-gnode-childs parent-id))
     (updater
      #:graph-changer (lambda ()
-                      (set-G (graph-replace-edges G (triple parent-id "has child" child-id) (list (triple parent-id "has child" child-id) (triple parent-id "has child" (pop-clipboard))))))
+                      (let ((pgn (hash-ref G parent-id)))
+		       (set-G (hash-set G parent-id (parent-gnode parent-id (gnode-name pgn) (replace child-id (list child-id (pop-clipboard)) (parent-gnode-childs pgn)) (parent-gnode-vars pgn))))))
+;                      (set-G (graph-replace-edges G (triple parent-id "has child" child-id) (list (triple parent-id "has child" child-id) (triple parent-id "has child" (pop-clipboard))))))
      #:open-updater  (lambda ()
                       (for-all-trees
                        (lambda (tree)
@@ -54,7 +56,9 @@
   (make-paste-below (parent-id parent-laddr)
    (updater
     #:graph-changer     (lambda ()
-                         (set-G (graph-prepend-edge G (triple parent-id "has child" (pop-clipboard)))))
+                         (let ((pgn (hash-ref G parent-id)))
+			  (set-G (hash-set G parent-id (parent-gnode parent-id (gnode-name pgn) (cons (pop-clipboard) (parent-gnode-childs pgn)) (parent-gnode-vars pgn))))))
+;                         (set-G (graph-prepend-edge G (triple parent-id "has child" (pop-clipboard)))))
     #:open-updater      (lambda ()
                          (set-whole-tree-open! Selected-tree (set-union (whole-tree-open Selected-tree) (set parent-laddr))))
     #:selection-updater (lambda ()

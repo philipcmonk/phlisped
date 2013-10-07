@@ -130,4 +130,6 @@
     offset)
    (+ (max offset start) (/ visible-width 2) (- (/ lenpiece 2))))))
 
+(define (replace t1 t2s es)
+ (append (takef es (negate (curry equal? t1))) t2s (cdr (member t1 es))))
 

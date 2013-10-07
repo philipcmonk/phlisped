@@ -1,6 +1,7 @@
 #lang racket
 
 (require "disp.rkt")
+(require "extractdata.rkt")
 
 (require (for-syntax racket/system))
 (define-syntax (require-dir syn)

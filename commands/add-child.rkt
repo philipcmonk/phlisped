@@ -2,17 +2,18 @@
 
 (require "../core/common.rkt")
 (require (except-in "../core/extractdata.rkt" with))
-(require "../core/graph.rkt")
+(require "../core/gnode.rkt")
 
 (provide data add-child)
 
 (define (add-child event)
- (let* ((id (selected-id Selected-tree))
-        (is-defined-as (graph-neighborhood-edge-forward G id "is defined as")))
+ (let* ((id (selected-id Selected-tree)))
   (updater
    #:graph-changer     (lambda ()
-                        (set-G (graph-prepend-edges G (list (triple id "has child" Next-id) (triple Next-id "is written" '-))))
-                        (set-Next-id (+ 1 Next-id)))
+                        (let ((gn (hash-ref G id)))
+                         (set-G (hash-set G id (parent-gnode id (gnode-name gn) (cons Next-id (if (parent-gnode? gn) (parent-gnode-childs gn) '())) (if (parent-gnode? gn) (parent-gnode-vars gn) '()))))
+			 (set-G (hash-set G Next-id (terminal-gnode id '-)))
+                         (set-Next-id (+ 1 Next-id))))
    #:open-updater      (lambda ()
                         (for-all-trees
                          (lambda (tree)

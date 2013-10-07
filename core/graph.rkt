@@ -4,14 +4,14 @@
 
 (require racket/set)
 
-(provide (all-defined-out))
+(provide (except-out (all-defined-out) replace))
 
 (struct graph (vertices edges) #:prefab)
 (struct triple (start edge end) #:prefab)
 
 (define (string->graph str)
  (let* ((lines (filter (lambda (line) (not (equal? line ""))) (regexp-split #rx"\n" str)))
-	(edges (map (lambda (line) (apply triple (regexp-split #rx"\t" line))) lines)))
+        (edges (map (lambda (line) (apply triple (regexp-split #rx"\t" line))) lines)))
   (graph
    (apply set-union (map (lambda (e) (set (triple-start e) (triple-end e))) edges))
    edges)))
@@ -34,10 +34,10 @@
 (define (create-triples v1 e v2)
  (flatten 
   (let* ((len (cond
-	       ((list? v1) (length v1))
-	       ((list? e) (length e))
-	       ((list? v2) (length v2))
-	       (#t 1))))
+               ((list? v1) (length v1))
+               ((list? e) (length e))
+               ((list? v2) (length v2))
+               (#t 1))))
    (map
     (lambda (vv1 ee vv2)
      (if (or (list? vv1) (list? ee) (list? vv2))
