@@ -4,7 +4,7 @@ phlisp
 Philosophy
 ----------
 
-Phlisp is a lisp-like language that is defined as a directed, partially ordered, labeled graph (hereafter the "abstract syntax graph" or "ASG").  Phlisp's main influences are members of the lisp family, particularly Racket.  The purpose of Phlisp is to create a language that may be edited not with a text editor but with a tree/graph editor built for the purpose.  The canonical implementation is phlisped.
+Phlisp is a lisp-like language that is defined as a directed, partially ordered, labeled graph (hereafter the "abstract syntax graph" or "ASG").  Phlisp's main influences are members of the lisp family, particularly Racket.  The purpose of phlisp is to create a language that may be edited not with a text editor but with a tree/graph editor built for the purpose.  The canonical implementation is phlisped.
 
 Phlisp code compiles to Racket code, which may then be run with the standard Racket utilities.  Most phlisp code translates fairly directly to Racket.  The main functional additions are related to defining variables.  Instead of using `define` and `let` statements, we have each reference to a variable simply reference the same node in the ASG.  These variables are assigned a particular environment node and may be referenced in any lexical descendant of that node.  In this way, all cross references are direct, and variable handling is greatly simplified.
 
