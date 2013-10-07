@@ -34,9 +34,6 @@
   (make-arg ()
    (let* ((link2 (selected-id Selected-tree))
           (parent-link2 (selected-parent-id Selected-tree))
-;          (has-child (member link2 (hash-ref G parent-link2)))
-;          (parent-link2-t (if has-child (car has-child) '()))
-;          (is-defined-as (graph-neighborhood-edge-forward G link2 "is defined as"))
           (arg-id Next-id))
     (updater
      #:graph-changer     (lambda ()
@@ -46,29 +43,20 @@
                            (with
                             ((set-Next-id (+ 1 Next-id))
                              (add-arg-to-hijito)
-;                             (add-arg-to-call)
                              (convert-var-to-arg))
                    
                             (add-arg-to-hijito ()
 			     (set-G (hash-set G LINK1 (function-gnode LINK1 (gnode-name l1gn) (variable-gnode-defined l1gn) (append (function-gnode-args l1gn) (list arg-id)))))
 			     (set-G (hash-set G arg-id (argument-gnode arg-id 'arger))))
-;                             (set-G (graph-append-edges G (list (triple LINK1 "has formal arg" arg-id) (triple arg-id "is written" 'arger) (triple arg-id "is reified as" (string->symbol (format "a~s" arg-id)))))))
-                   
-                            (add-arg-to-call ()
-			     '())
-;                             (let ((replacement (if (variable-gnode? l2gn) (variable-gnode-defined l2gn) link2)))
-;                              (set-G (graph-append-edge G (triple LINK1PARENT "has child" replacement)))))
                    
                             (convert-var-to-arg ()
                              (set-G ((if (variable-gnode? l2gn) swap-var swap-normal))))
                    
                             (swap-normal ()
                              (hash-set G parent-link2 (parent-gnode parent-link2 (gnode-name pl2gn) (replace link2 (list arg-id) (parent-gnode-childs pl2gn)) (parent-gnode-vars pl2gn))))
-;                             (graph-replace-edges G parent-link2-t (list (triple parent-link2 (triple-edge parent-link2-t) arg-id))))
                    
                             (swap-var ()
 			     (hash-set G link2 (variable-gnode link2 (gnode-name l2gn) arg-id))))))
-;                             (graph-replace-edges G (variable-gnode-defined l2gn) (list (triple link2 "is defined as" arg-id)))))))
      #:selection-updater (lambda ()
                           (exit-argify-mode)))))))
 

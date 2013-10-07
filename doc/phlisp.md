@@ -13,7 +13,7 @@ Additionally, functions are defined in a manner very similar to variables.  The 
 The Graph
 ---------
 
-All nodes in the graph are distinguishable.  All edges are assumed unordered unless explicitly specified as ordered.  A node must be exactly one of the following:
+All nodes in the graph are distinguishable.  All lists are assumed unordered unless explicitly specified as ordered.  All nodes must have a name.  A node must be exactly one of the following:
 
 - a parent of one or more nodes
 - a variable defined as another node
@@ -22,19 +22,19 @@ All nodes in the graph are distinguishable.  All edges are assumed unordered unl
 
 ### Parent Nodes
 
-Parent nodes must have one or more ordered forward edges to a parent, variable, or terminal node labeled `has-child`.  They may have one or more forward edges to variable nodes labeled `is-environment-of`.  Additionally, they may have a forward edge to a string labeled `has-name`.
+Parent nodes must have one or more ordered parent, variable, or terminal node children.  They may have one or more variable node vars.
 
 ### Variable Nodes
 
-Variable nodes have exactly one forward edge to a parent, variable, terminal, or argument node labeled `is-defined-as`.  Additionally, they may have a forward edge to a string labeled `has-name`.  They may have a forward edge to `-1` labeled `is-function`.  If so, then we call it a function node, and it may have one or more ordered forward edges to an argument node labeled `has-formal-arg`.
+Variable nodes have exactly one parent, variable, terminal, or argument node definition.  They may be labeled `is-function`.  If so, then we call it a function node, and it may have one or more ordered argument node arguments.
 
 ### Argument Nodes
 
-Argument nodes must have exactly one forward edge to `-1` labeled `is-formal-arg`.  Additionally, the may have a forward edge to a string labeled `has-name`.
+Argument nodes must be labeled as such.
 
 ### Terminal Nodes
 
-Terminal nodes must have a forward edge to a string labeled `has-name`.
+Terminal nodes must be labeled as such.
 
 Compilation
 -----------
@@ -44,5 +44,5 @@ The compilation of any node is dependent only on the lexical children of that no
 Define `c(n)` such that if `n` is a:
 
 - variable node, then if `id` is a unique symbol associated with `n`, yield `id`.
-- terminal node, then if `n` has forward edge to `name` labeled `has-name`, yield `name`.
-- parent node, let `n` have `r` child nodes labeled `child1 child2 ... childr` and `s` edges labeled `is-environment-of` with ends `var1 var2 ... vars` with unique associated symbols `id1 id2 .. ids`.  For each `varp`, let `resp` be `c(varp)` if `varp` is not a function node, else let `varp` have `t` formal arguments labeled `arg1 arg2 ... argt` with unique associated symbols `idp1 idp2 ... idpt` and let `resp` be `(lambda (idp1 idp2 ... idpt) c(varp))`  yield `(letrec ((id1 res1) (id2 res2) ... (ids ress)) (c(child1) c(child2) ... c(childs)))`.  Note that since `is-environment-of` is unordered, to get the ordering, we topologically sort the ends such that if the definition of `varp` references `varq` in any place other than a function definition, then `varp` precedes `varq`.
+- terminal node, then if `n` has name `name`, yield `name`.
+- parent node, let `n` have `r` child nodes labeled `child1 child2 ... childr` and `s` vars `var1 var2 ... vars` with unique associated symbols `id1 id2 .. ids`.  For each `varp`, let `resp` be `c(varp)` if `varp` is not a function node, else let `varp` have `t` formal arguments labeled `arg1 arg2 ... argt` with unique associated symbols `idp1 idp2 ... idpt` and let `resp` be `(lambda (idp1 idp2 ... idpt) c(varp))`  yield `(letrec ((id1 res1) (id2 res2) ... (ids ress)) (c(child1) c(child2) ... c(childs)))`.  Note that since vars is unordered, to get the ordering, we topologically sort the ends such that if the definition of `varp` references `varq` in any place other than a function definition, then `varp` precedes `varq`.

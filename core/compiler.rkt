@@ -36,53 +36,6 @@
 		       vars)))
       `(letrec ,(map list varsyms ress) ,childreifieds)))))))
 
-
-; (calc-free-variables g)
-; (let reify-loop ((id id) (tracing? tracing?))
-;  (let ((has-child (graph-neighborhood-edge-forward g id "has child"))
-;        (is-written (graph-neighborhood-edge-forward g id "is written"))
-;        (is-defined-as (graph-neighborhood-edge-forward g id "is defined as"))
-;        (is-function (graph-neighborhood-edge-forward g id "is function"))
-;        (has-env (graph-neighborhood-edge-backward g id "has env"))
-;        (is-reified-as (graph-neighborhood-edge-forward g id "is reified as")))
-;   (let* ((meat (cond
-;                 ((not (null? has-child))
-;                  (let ((realmeat (map (curryr reify-loop (and tracing? (not (eq? (let ((ress (reify-loop (triple-end (car has-child)) #f))) (display ress) (newline) ress) 'quote)))) (map triple-end has-child))))
-;                   (if tracing?
-;                    `(begin
-;                      (set! stack (cons (quote ,(string->symbol (format "flag~a" id))) stack))
-;                      (let ((res ,realmeat)
-;                            (childreses '()))
-;                       (andmap
-;                        (lambda (item) (if (eq? item (quote ,(string->symbol (format "flag~a" id)))) #f (begin (set! childreses (cons item childreses)) #t)))
-;                        stack)
-;                       (set! h (graph-append-edges h (list (triple ,id 'has-res Next-r) (triple Next-r 'has-val res))))
-;                       (set! h (graph-append-edges h (map (curry triple Next-r 'has-roots) childreses)))
-;                       (set! stack (drop stack (+ 1 (length childreses))))
-;                       (set! stack (cons Next-r stack))
-;                       (set! Next-r (- Next-r 1))
-;                       res))
-;                    realmeat)))
-;                 ((not (null? is-defined-as))
-;                  (string->symbol (format "v~a" id)))
-;                 ((not (null? is-reified-as))
-;                  (triple-end (car is-reified-as)))
-;                 ((not (null? is-written))
-;                  (triple-end (car is-written)))
-;                 (#t (begin (display "unable to categorize id:  ") (display id) (newline) 'unknown)))))
-;    (if (null? has-env)
-;     meat
-;     (let ((env (list 'letrec
-;                      (map
-;                       (lambda (t) (list (string->symbol (format "v~a" t)) (let* ((in-id (triple-end (car (graph-neighborhood-edge-forward g t "is defined as"))))
-;                                                                                  (is-function-in (graph-neighborhood-edge-forward g t "is function")))
-;                                                                            (if (null? is-function-in)
-;                                                                             (reify-loop in-id tracing?)
-;                                                                             (list 'lambda (map (compose string->symbol (curry format "a~s") triple-end) (graph-neighborhood-edge-forward g t "has formal arg")) (reify-loop in-id tracing?))))))
-;                       (topo-sort (map triple-start has-env)))
-;                      meat)))
-;       env))))))
-
 (define (topo-sort ids)
  (define traversed '())
  (with
@@ -128,23 +81,15 @@
         ((parent-gnode? gn) (parent-gnode-childs gn))
         ((variable-gnode? gn) (variable-gnode-defined gn))
         (#t '()))))
-;        (map triple-end (graph-neighborhood-edge-forward g id "has child"))
-;        (map triple-end (graph-neighborhood-edge-forward g id "is defined as")))))
 
      (get-new-free-variables ()
       (if (or ((variable-gnode? gn) (argument-gnode? gn)))
        (list id)
        '()))
-;      (append
-;       (map triple-start (graph-neighborhood-edge-forward g id "is defined as"))
-;       (if (null? (graph-neighborhood-edge-forward g id "is reified as")) '() (list id))))
 
      (defined-here ()
       (cond
        ((parent-gnode? gn) (parent-gnode-vars gn))
        ((function-gnode? gn) (function-gnode-args gn))
        (#t '()))))))))
-;      (append
-;       (map triple-start (graph-neighborhood-edge-backward g id "has env"))
-;       (map triple-end (graph-neighborhood-edge-forward g id "has formal arg"))))))))
 

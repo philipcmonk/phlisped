@@ -74,9 +74,6 @@
 (define (link-to id1 parent-id1 id2)
  (let* ((gn2 (hash-ref G id2))
         (pgn1 (hash-ref G parent-id1)))
-;        (has-child (graph-neighborhood-edge-backward G id1 "has child"))
-;        (is-defined-as-1 (graph-neighborhood-edge-backward G id1 "is defined as"))
-;        (parent-id1-t (if (not (null? has-child)) (car has-child) (if (not (null? is-defined-as-1)) (car is-defined-as-1) '()))))
   (updater
    #:graph-changer (lambda ()
                     (cond
@@ -87,14 +84,11 @@
                                ((function-gnode? pgn1) (function-gnode parent-id1 (gnode-name pgn1) id2 (function-gnode-args pgn1)))
                                ((variable-gnode? pgn1) (variable-gnode parent-id1 (gnode-name pgn1) id2))
                                (#t '())))))
-;                      (set-G (graph-replace-edges G parent-id1-t (list (triple (triple-start parent-id1-t) (triple-edge parent-id1-t) id2)))))
                      (#t '()))))))
 
 (define (write-text-to-graph)
  (let* ((id (selected-id Selected-tree))
         (gn (hash-ref G id)))
-;        (is-written (is-written-t id))
-;        (is-named (graph-neighborhood-edge-forward G id "is named")))
   (updater
    #:graph-changer (lambda ()
                     (with
@@ -107,23 +101,9 @@
                          ((argument-gnode? gn) (argument-gnode (gnode-id gn) (get-insert-text)))
                          ((terminal-gnode? gn) (terminal-gnode (gnode-id gn) (get-insert-text)))
                          (#t '())))))
-;                       (if is-written
-;                               (set-written)
-;                               (if (null? is-named)
-;                                (add-name)
-;                                (set-name)))))
-;
+
                      (get-insert-text ()
                       (if (char-numeric? (car (string->list (if (eq? "" INSERTTEXT) "-" INSERTTEXT)))) (string->number INSERTTEXT) (string->symbol (if (eq? "" INSERTTEXT) "-" INSERTTEXT)))))))))
-;
-;                     (set-written ()
-;                      (graph-replace-edges G is-written (list (triple id "is written" (get-insert-text)))))
-;
-;                     (add-name ()
-;                      (graph-append-edge G (triple id "is named" (get-insert-text))))
-;
-;                     (set-name ()
-;                      (graph-replace-edges G (car is-named) (list (triple id "is named" (get-insert-text))))))))))
 
 (define data
  (list
