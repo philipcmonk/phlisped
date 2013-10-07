@@ -1,8 +1,8 @@
 #lang racket
 
-(require "../common.ss")
-(require (except-in "../extractdata.ss" with))
-(require "../graph.ss")
+(require "../core/common.rkt")
+(require (except-in "../core/extractdata.rkt" with))
+(require "../core/graph.rkt")
 
 (provide data add-sibling)
 

@@ -1,7 +1,7 @@
 #lang racket
 
 (require sgl sgl/gl)
-(require "../../common.ss")
+(require "../../core/common.rkt")
 (require "def-painter.ss")
 
 (provide make-linear-vertical-v11n other-v11n-utterance-total-height other-v11n-utterance-runtime-vals)

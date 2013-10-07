@@ -1,6 +1,6 @@
 #lang racket
 
-(require "graph.ss")
+(require "graph.rkt")
 
 (provide reify)
 

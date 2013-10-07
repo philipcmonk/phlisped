@@ -1,7 +1,7 @@
 #lang racket
 
-(require "../common.ss")
-(require "../disp.ss")
+(require "../core/common.rkt")
+(require "../core/disp.rkt")
 
 (provide data)
 

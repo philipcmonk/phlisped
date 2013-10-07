@@ -1,9 +1,9 @@
 #lang racket
 
-(require "../common.ss")
-(require (except-in "../extractdata.ss" with LINK1 LINK1PARENT LINK1ADDR INSERTTEXT))
-(require "../graph.ss")
-(require "../disp.ss")
+(require "../core/common.rkt")
+(require (except-in "../core/extractdata.rkt" with LINK1 LINK1PARENT LINK1ADDR INSERTTEXT))
+(require "../core/graph.rkt")
+(require "../core/disp.rkt")
 (require (only-in "add-sibling.rkt" add-sibling))
 (require (only-in "add-child.rkt" add-child))
 (require (only-in "search.rkt" search-bound-variables))

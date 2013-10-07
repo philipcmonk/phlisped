@@ -1,4 +1,4 @@
 #!/bin/bash
 
-racket phlisp.ss $@
+racket core/phlisp.rkt $@
 

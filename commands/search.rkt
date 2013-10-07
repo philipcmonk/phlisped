@@ -1,9 +1,9 @@
 #lang racket
 
-(require "../common.ss")
-(require (except-in "../extractdata.ss" with))
-(require "../graph.ss")
-(require "../disp.ss")
+(require "../core/common.rkt")
+(require (except-in "../core/extractdata.rkt" with))
+(require "../core/graph.rkt")
+(require "../core/disp.rkt")
 
 (provide data search-bound-variables)
 

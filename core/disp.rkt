@@ -4,7 +4,7 @@
 (require (only-in racket/gui (yield yield-gui) (-> ->-gui)))
 (require sgl sgl/gl)
 
-(require "common.ss")
+(require "common.rkt")
 
 (provide my-canvas% box-width box-height box-maj-dim node-width node-height node-maj-dim VERTICAL display-on-screen add-to-screen Thecanvas Info Selected-tree utterance-parent utterance-node utterance-args node-data node-laddr whole-tree-selection-u whole-tree-selection set-whole-tree-selection! whole-tree-open set-whole-tree-open! whole-tree-utterance-tree add-key-evs key-evs update-childfuncs set-info enter-insert-mode exit-insert-mode enter-scope-mode exit-scope-mode enter-argify-mode exit-argify-mode enter-search-mode exit-search-mode enter-paste-mode exit-paste-mode set-search-results Search-results show-search-tree scroll-search-results remove-search-tree paint-info semantic-go find-utterance-from-laddr-safe for-all-trees remove-tree open-u close-u cycle-v11n set-VAR1 set-VAR2 set-VAR3 VAR1 VAR2 VAR3 VAR1OFFSET VAR2OFFSET VAR3OFFSET VAR1MIN VAR2MIN VAR3MIN VAR1MAX VAR2MAX VAR3MAX generate-utterance-tree select Trees root->node)
 
@@ -56,7 +56,7 @@
  (let* ((dir (cadr (syntax->datum syn)))
         (phls (map (lambda (f) (string-append dir "/" f)) (filter (lambda (f) (regexp-match ".phl$" f)) (map path->string (directory-list dir))))))
   (for-each (lambda (phl) (system* "bin/phlisp" (string-append "-o " (regexp-replace ".phl$" phl ".rkt")) phl)) phls)
-  (let* ((rkts (map (lambda (f) (string-append dir "/" f)) (filter (lambda (f) (regexp-match ".rkt$" f)) (map path->string (directory-list dir)))))
+  (let* ((rkts (map (lambda (f) (string-append "../" dir "/" f)) (filter (lambda (f) (regexp-match ".rkt$" f)) (map path->string (directory-list dir)))))
          (rkts2 (map (lambda (rkt) `(prefix-in ,(string->symbol (string-append "v11n-" rkt ":")) ,rkt)) rkts))
 	 (regs (map (lambda (rkt) (string->symbol (string-append "v11n-" rkt ":visualization"))) rkts)))
    (datum->syntax syn `(begin
@@ -70,7 +70,7 @@
   (let* ((cur (whole-tree-v11n Selected-tree))
          (tail (member cur v11ns)))
    (if (or (null? tail) (null? (cdr tail)))
-    (cadddr v11ns)
+    (car v11ns)
     (cadr tail))))
  (generate-utterance-tree Selected-tree)
  (send Thecanvas on-paint))

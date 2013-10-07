@@ -1,11 +1,10 @@
 #lang racket
 
-(require "graph.ss" "disp.ss" "compiler.rkt")
+(require "graph.rkt" "disp.rkt" "compiler.rkt")
 (require racket/set)
 
 (provide Thecanvas Info (all-defined-out) update-childfuncs for-all-trees semantic-go)
 
-(define FILENAME "extractdata.ss")
 (define GRFILE "visualizations/treemap-v11n.phl")
 
 (define NEWCODE #f)

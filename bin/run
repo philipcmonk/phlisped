@@ -1,0 +1,4 @@
+#!/bin/bash
+
+racket core/main.rkt $@
+

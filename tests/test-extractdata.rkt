@@ -2,8 +2,8 @@
 
 (require rackunit
          racket/gui
-         "disp.ss"
-         "extractdata.ss")
+         "../core/disp.rkt"
+         "../core/extractdata.rkt")
 
 (test-case
  "basic functionality"

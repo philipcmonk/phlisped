@@ -1,7 +1,7 @@
 #lang racket
 
 (require sgl sgl/gl)
-(require "../../common.ss")
+(require "../../core/common.rkt")
 
 (provide def-painter)
 

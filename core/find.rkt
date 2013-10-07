@@ -1,6 +1,6 @@
 #lang racket
 
-(require "graph.ss")
+(require "graph.rkt")
 
 ; Return all triples for which (pred t) returns true.
 (define (graph-filter g pred)

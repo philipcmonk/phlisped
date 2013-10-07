@@ -1,8 +1,8 @@
 #lang racket
 
 (require sgl sgl/gl)
-(require "../common.ss")
-(require "helpers/linear-vertical-v11n.ss")
+(require "../core/common.rkt")
+(require "helpers/linear-vertical-v11n.rkt")
 
 (provide visualization)
 
