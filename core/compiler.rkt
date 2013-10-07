@@ -21,20 +21,23 @@
    (cond
     ((variable-gnode? gn) (id->sym id))
     ((terminal-gnode? gn) (gnode-name gn))
+    ((argument-gnode? gn) (id->sym id))
     ((parent-gnode? gn)
      (let* ((childs (parent-gnode-childs gn))
             (childreifieds (map reify-loop childs))
             (vars (topo-sort (parent-gnode-vars gn)))
             (varsyms (map id->sym vars))
             (ress (map (lambda (var)
-			(let ((defined (variable-gnode-defined (hash-ref g var))))
+                        (let ((defined (variable-gnode-defined (hash-ref g var))))
                          (if (function-gnode? (hash-ref g var))
                           (let* ((args (function-gnode-args (hash-ref g var)))
                                  (argsyms (map id->sym args)))
                            `(lambda ,argsyms ,(reify-loop defined)))
                           (reify-loop defined))))
-		       vars)))
-      `(letrec ,(map list varsyms ress) ,childreifieds)))))))
+                       vars)))
+      (if (null? varsyms)
+       childreifieds
+       `(letrec ,(map list varsyms ress) ,childreifieds))))))))
 
 (define (topo-sort ids)
  (define traversed '())
@@ -79,11 +82,11 @@
        (lambda (child) (update-free-variable-id child) (hash-ref free-variables child))
        (cond
         ((parent-gnode? gn) (parent-gnode-childs gn))
-        ((variable-gnode? gn) (variable-gnode-defined gn))
+        ((variable-gnode? gn) (list (variable-gnode-defined gn)))
         (#t '()))))
 
      (get-new-free-variables ()
-      (if (or ((variable-gnode? gn) (argument-gnode? gn)))
+      (if (or (variable-gnode? gn) (argument-gnode? gn))
        (list id)
        '()))
 
