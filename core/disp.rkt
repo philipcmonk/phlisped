@@ -59,6 +59,7 @@
   (let* ((rkts (map (lambda (f) (string-append "../" dir "/" f)) (filter (lambda (f) (regexp-match ".rkt$" f)) (map path->string (directory-list dir)))))
          (rkts2 (map (lambda (rkt) `(prefix-in ,(string->symbol (string-append "v11n-" rkt ":")) ,rkt)) rkts))
 	 (regs (map (lambda (rkt) (string->symbol (string-append "v11n-" rkt ":visualization"))) rkts)))
+   (displayln rkts)
    (datum->syntax syn `(begin
 			(require ,@rkts2)
 			(define v11ns (list ,@regs)))))))
@@ -78,12 +79,12 @@
 (define Trees (list
                (apply whole-tree 
                       (let* ((dummy-n (node '(0 'dummy "dummy" () () () () ()) '() (delay '()) (lambda (_) "t")))
-                             (dummy-utterance (utterance dummy-n 0 0 0 0 0 0 '() (cons '(0 0 0) '(0 0 0)))))
-                       (list dummy-n (lambda (a) '()) dummy-utterance (set) '() 0 0 0 0 (cadddr v11ns) 0 0 1)))
+                             (dummy-utterance (cartesian-utterance dummy-n '() (cons '(0 0 0) '(0 0 0)) 0 0 0 0 0 0 )))
+                       (list dummy-n (lambda (a) '()) dummy-utterance (set) '() 0 0 0 0 (cadddr (cdr v11ns)) 0 0 1)))
                (apply whole-tree 
                       (let* ((dummy-n (node '(0 'dummy-bar "dummy bar" () () () () ()) '() (delay '()) (lambda (_) "r")))
-                             (dummy-utterance (utterance dummy-n 0 0 0 0 0 0 '() (cons '(0 0 0) '(0 0 0)))))
-                       (list dummy-n (lambda (a) '()) dummy-utterance (set) '() 800 30 (- WIDTH 600) 300 (caddr v11ns) 0 0 1)))))
+                             (dummy-utterance (cartesian-utterance dummy-n '() (cons '(0 0 0) '(0 0 0)) 0 0 0 0 0 0 )))
+                       (list dummy-n (lambda (a) '()) dummy-utterance (set) '() 800 30 (- WIDTH 600) 300 (cadddr v11ns) 0 0 1)))))
 (set-selected-tree (cadr Trees))
 (define Bar-tree (cadr Trees))
 
@@ -337,17 +338,17 @@
   (paint-utterance-data (x y)
    (gl-push-matrix)
    (gl-translate x y 0)
-   (ftglRenderFont Font (format "x:  ~a" (utterance-x u)) 65535)
+;   (ftglRenderFont Font (format "x:  ~a" (utterance-x u)) 65535)
    (gl-translate 100 0 0)
-   (ftglRenderFont Font (format "y:  ~a" (utterance-y u)) 65535)
+;   (ftglRenderFont Font (format "y:  ~a" (utterance-y u)) 65535)
    (gl-translate -100 -20 0)
-   (ftglRenderFont Font (format "w:  ~a" (utterance-w u)) 65535)
+;   (ftglRenderFont Font (format "w:  ~a" (utterance-w u)) 65535)
    (gl-translate 100 0 0)
-   (ftglRenderFont Font (format "h:  ~a" (utterance-h u)) 65535)
+;   (ftglRenderFont Font (format "h:  ~a" (utterance-h u)) 65535)
    (gl-translate -100 -20 0)
-   (ftglRenderFont Font (format "text-w:  ~a" (utterance-text-w u)) 65535)
+;   (ftglRenderFont Font (format "text-w:  ~a" (utterance-text-w u)) 65535)
    (gl-translate 100 0 0)
-   (ftglRenderFont Font (format "text-h:  ~a" (utterance-text-h u)) 65535)
+;   (ftglRenderFont Font (format "text-h:  ~a" (utterance-text-h u)) 65535)
    (gl-translate -100 -20 0)
    (ftglRenderFont Font (format "color:  ~a" (utterance-clr u)) 65535)
    (gl-translate 0 -20 0)
@@ -495,24 +496,25 @@
 (define (select u tree)
  (set-selected-tree tree)
  (set-whole-tree-selection! tree (node-laddr (utterance-node u)))
- (let ((x (+ (whole-tree-offset-x tree) (utterance-x u)))
-       (y (+ (whole-tree-offset-y tree) (utterance-y u)))
-       (w (utterance-w u))
-       (h (utterance-h u)))
-  (if
-   (or
-    (and (negative? (+ x w)) (not VERTICAL))
-    (> x (/ (whole-tree-w tree) (whole-tree-zoom tree))))
-   (let ((c (+ (utterance-x u) (/ w 2))))
-    (set-whole-tree-offset-x! tree (- (+ c (- (/ (whole-tree-w tree) (whole-tree-zoom tree) 2))))))
-   '())
-  (if
-   (or
-    (and (negative? (+ y h)) VERTICAL)
-    (> y (/ (whole-tree-h tree) (whole-tree-zoom tree))))
-   (let ((c (+ (utterance-y u) (/ h 2))))
-    (set-whole-tree-offset-y! tree (- (+ c (- (/ (whole-tree-h tree) (whole-tree-zoom tree) 2))))))
-   '())))
+ )
+; (let ((x (+ (whole-tree-offset-x tree) (utterance-x u)))
+;       (y (+ (whole-tree-offset-y tree) (utterance-y u)))
+;       (w (utterance-w u))
+;       (h (utterance-h u)))
+;  (if
+;   (or
+;    (and (negative? (+ x w)) (not VERTICAL))
+;    (> x (/ (whole-tree-w tree) (whole-tree-zoom tree))))
+;   (let ((c (+ (utterance-x u) (/ w 2))))
+;    (set-whole-tree-offset-x! tree (- (+ c (- (/ (whole-tree-w tree) (whole-tree-zoom tree) 2))))))
+;   '())
+;  (if
+;   (or
+;    (and (negative? (+ y h)) VERTICAL)
+;    (> y (/ (whole-tree-h tree) (whole-tree-zoom tree))))
+;   (let ((c (+ (utterance-y u) (/ h 2))))
+;    (set-whole-tree-offset-y! tree (- (+ c (- (/ (whole-tree-h tree) (whole-tree-zoom tree) 2))))))
+;   '())))
 
 (define Info-dim (list 0 (- HEIGHT 30) WIDTH 30))
 (define Bar-dim (list 0 (- HEIGHT 330) WIDTH 300))
@@ -531,7 +533,8 @@
  (list (car l) (- HEIGHT (+ (cadddr l) (cadr l))) (caddr l) (cadddr l)))
 
 (define (generate-utterance-tree tree)
- (set-whole-tree-utterance-tree! tree ((v11n-node->v11n-utterance (whole-tree-v11n tree)) (whole-tree-n-tree tree) (utterance-x (whole-tree-utterance-tree tree)) (utterance-y (whole-tree-utterance-tree tree)) (if VERTICAL (node-width (whole-tree-n-tree tree) tree) 0) 0 1 tree)))
+ (set-whole-tree-utterance-tree! tree ((v11n-node->v11n-utterance (whole-tree-v11n tree)) (whole-tree-n-tree tree) tree)))
+; (set-whole-tree-utterance-tree! tree ((v11n-node->v11n-utterance (whole-tree-v11n tree)) (whole-tree-n-tree tree) (utterance-x (whole-tree-utterance-tree tree)) (utterance-y (whole-tree-utterance-tree tree)) (if VERTICAL (node-width (whole-tree-n-tree tree) tree) 0) 0 1 tree)))
 
 (define (find-utterance-from-laddr tree laddr)
  (if (null? laddr)
@@ -564,7 +567,7 @@
 (define (display-on-screen x y w h root childfunc)
  (let ((tree
   (let* ((n (root->node root childfunc '()))
-         (dummy-utterance (utterance n 0 0 0 0 0 0 '() (cons '(0 0 0) '(0 0 0)))))
+         (dummy-utterance (cartesian-utterance n '() (cons '(0 0 0) '(0 0 0)) 0 0 0 0 0 0 )))
    (whole-tree
     n
     childfunc
@@ -579,7 +582,7 @@
     0
     0
     1))))
- (set-whole-tree-utterance-tree! tree ((v11n-node->v11n-utterance (cadddr v11ns)) (whole-tree-n-tree tree) 0 0 0 0 '() tree))
+ (set-whole-tree-utterance-tree! tree ((v11n-node->v11n-utterance (cadddr v11ns)) (whole-tree-n-tree tree) tree))
  (set-whole-tree-selection! tree '())
  (set! Trees (append Trees (list tree)))
  tree))

@@ -32,7 +32,7 @@
      (#t '()))))
 
   (make-paste (parent-id child-id)
-   (if (member child-id (parent-gnode-childs parent-id))
+   (if (member child-id (parent-gnode-childs (hash-ref G parent-id)))
     (updater
      #:graph-changer (lambda ()
                       (let ((pgn (hash-ref G parent-id)))

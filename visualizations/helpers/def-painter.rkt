@@ -3,6 +3,8 @@
 (require sgl sgl/gl)
 (require "../../core/common.rkt")
 
+;(struct cartesian-utterance utterance (x y w h text-w text-h))
+
 (provide def-painter)
 
 (define (inv? x y w h tree)
@@ -66,6 +68,7 @@
 
     (glEnable GL_TEXTURE_2D)
     (gl-clear 'color-buffer-bit)
+    (gl-color 1 0 0)
 
     (foldl
      (lambda (img img-d d)
@@ -96,12 +99,12 @@
 
    (utterance-paint (u tree)
     (let* ((text ((node-text-func (utterance-node u)) (utterance-node u)))
-           (x (utterance-x u))
-           (y (utterance-y u))
-           (w (utterance-w u))
-           (h (utterance-h u))
-           (text-w (utterance-text-w u))
-           (text-h (utterance-text-h u))
+           (x (cartesian-utterance-x u))
+           (y (cartesian-utterance-y u))
+           (w (cartesian-utterance-w u))
+           (h (cartesian-utterance-h u))
+           (text-w (cartesian-utterance-text-w u))
+           (text-h (cartesian-utterance-text-h u))
            (args (utterance-args u))
            (clr (utterance-clr u)))
      (if (invisible? x y w h tree)
@@ -116,6 +119,6 @@
 ;         (* (whole-tree-zoom tree) (+ text-h -3 (center y h text-h (- (whole-tree-offset-y tree)) (whole-tree-h tree))))
 ;         (car clr)
 ;         tree))
-       (for-each touch (map (lambda (arg) (future (lambda () (utterance-paint arg tree)))) args)))))))))
+       (map (curryr utterance-paint tree) args))))))))
 
 

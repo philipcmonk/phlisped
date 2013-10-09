@@ -6,7 +6,9 @@
 
 (provide make-linear-vertical-v11n other-v11n-utterance-total-height other-v11n-utterance-runtime-vals)
 
-(struct other-v11n-utterance utterance (total-height runtime-vals))
+;(struct cartesian-utterance utterance (x y w h text-w text-h))
+
+(struct other-v11n-utterance cartesian-utterance (total-height runtime-vals))
 
 (define (make-linear-vertical-v11n #:rectangle-drawer (rectangle-drawer values) #:text-generator (text-generator (lambda (text) text)))
  (v11n
@@ -20,8 +22,7 @@
        (text-generator text)
        (center x w (- text-w PADDING) (- (whole-tree-offset-x tree)) (whole-tree-w tree))
        (+ text-h -3 (center y h text-h (- (whole-tree-offset-y tree)) (whole-tree-h tree)))
-       (car clr)
-       tree)
+       (car clr))
       '())
      (map
       (lambda (val n)
@@ -29,13 +30,12 @@
         (format "~a" val)
         (+ x w 100 (* 40 n))
        (* (whole-tree-zoom tree) (+ text-h -3 (center y h text-h (- (whole-tree-offset-y tree)) (whole-tree-h tree))))
-        (car clr)
-        tree))
+        (car clr)))
       (other-v11n-utterance-runtime-vals u)
       (build-list (length (other-v11n-utterance-runtime-vals u)) identity))))
 
-  (lambda (n x y w row siblings tree)
-   (let node->utterance ((n n) (x x) (y y) (row row) (siblings siblings) (tree tree))
+  (lambda (n tree)
+   (let node->utterance ((n n) (x 0) (y 0) (row 0) (siblings '()) (tree tree))
     (let ((children 
            (if (closed? n tree)
             '()
@@ -62,14 +62,14 @@
               (node-args n))))))
      (other-v11n-utterance
       n
+      children
+      (get-color n tree)
       x
       y
       (box-width ((node-text-func n) n))
       (node-height n tree)
       (box-width ((node-text-func n) n))
       (box-height ((node-text-func n) n))
-      children
-      (get-color n tree)
       (foldl + (node-height n tree) (map other-v11n-utterance-total-height children))
       (map cadr (list-ref (node-data n) 7))))))
 
@@ -77,12 +77,12 @@
    (let find-utterance ((root root) (x x) (y y))
     (with
      ((if (or
-           (< y (+ (utterance-y root) (utterance-h root)))
-           (> y (+ (utterance-y root) (other-v11n-utterance-total-height root))))
+           (< y (+ (cartesian-utterance-y root) (cartesian-utterance-h root)))
+           (> y (+ (cartesian-utterance-y root) (other-v11n-utterance-total-height root))))
        root
        (ormap
         (lambda (child)
-         (if (< y (+ (utterance-y child) (other-v11n-utterance-total-height child)))
+         (if (< y (+ (cartesian-utterance-y child) (other-v11n-utterance-total-height child)))
           (find-utterance child x y)
           #f))
         (utterance-args root)))))))

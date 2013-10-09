@@ -11,9 +11,9 @@
   #:child-w-generator (lambda (n) -1)
   #:child-x-generator (lambda (data w n) (car data))
   #:child-y-generator (lambda (data arg tree) (+ (cadr data) (node-height arg tree)))
-  #:update-x-generator (lambda (data res) (+ (car data) (utterance-w res)))
+  #:update-x-generator (lambda (data res) (+ (car data) (cartesian-utterance-w res)))
   #:update-y-generator (lambda (data res arg tree) (cadr data))
-  #:width-generator (lambda (w n children) (max (box-width ((node-text-func n) n)) (apply + (map utterance-w children))))
+  #:width-generator (lambda (w n children) (max (box-width ((node-text-func n) n)) (apply + (map cartesian-utterance-w children))))
   #:height-generator (lambda (n tree) CELLHEIGHT)))
 
 ;(define default-v11n
