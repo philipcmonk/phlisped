@@ -80,7 +80,7 @@
                (apply whole-tree 
                       (let* ((dummy-n (node '(0 'dummy "dummy" () () () () ()) '() (delay '()) (lambda (_) "t")))
                              (dummy-utterance (cartesian-utterance dummy-n '() (cons '(0 0 0) '(0 0 0)) 0 0 0 0 0 0 )))
-                       (list dummy-n (lambda (a) '()) dummy-utterance (set) '() 0 0 0 0 (cadddr (cdr v11ns)) 0 0 1)))
+                       (list dummy-n (lambda (a) '()) dummy-utterance (set) '() 0 0 0 0 (cadddr (cddr v11ns)) 0 0 1)))
                (apply whole-tree 
                       (let* ((dummy-n (node '(0 'dummy-bar "dummy bar" () () () () ()) '() (delay '()) (lambda (_) "r")))
                              (dummy-utterance (cartesian-utterance dummy-n '() (cons '(0 0 0) '(0 0 0)) 0 0 0 0 0 0 )))
@@ -578,11 +578,11 @@
     y
     w
     h
-    (cadddr v11ns)
+    (cadddr (cddr v11ns))
     0
     0
     1))))
- (set-whole-tree-utterance-tree! tree ((v11n-node->v11n-utterance (cadddr v11ns)) (whole-tree-n-tree tree) tree))
+ (set-whole-tree-utterance-tree! tree ((v11n-node->v11n-utterance (cadddr (cddr v11ns))) (whole-tree-n-tree tree) tree))
  (set-whole-tree-selection! tree '())
  (set! Trees (append Trees (list tree)))
  tree))

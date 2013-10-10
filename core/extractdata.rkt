@@ -5,7 +5,7 @@
 
 (provide Thecanvas Info (all-defined-out) update-childfuncs for-all-trees semantic-go)
 
-(define GRFILE "tests/disk.phl")
+(define GRFILE "visualizations/hyperbolic-disk.phl")
 
 (define NEWCODE #f)
 
