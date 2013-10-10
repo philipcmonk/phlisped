@@ -42,28 +42,28 @@
 (define (cartesian-utterance-generator n tree)
  (generic-utterance-generator n tree cartesian-utterance
   (list 0
-   (lambda (data arg) data)
-   (lambda (data res) (+ data (cartesian-utterance-w res)))
+   (lambda (data chs arg n) data)
+   (lambda (data chs res n) (+ data (cartesian-utterance-w res)))
    (lambda (data chi n) data))
   (list 0
-   (lambda (data arg) (+ data CELLHEIGHT))
-   (lambda (data res) data)
+   (lambda (data chs arg n) (+ data CELLHEIGHT))
+   (lambda (data chs res n) data)
    (lambda (data chi n) data))
   (list 0
-   (lambda (data arg) data)
-   (lambda (data res) data)
+   (lambda (data chs arg n) data)
+   (lambda (data chs res n) data)
    (lambda (data chi n) (max (box-width ((node-text-func n) n)) (apply + (map cartesian-utterance-w chi)))))
   (list CELLHEIGHT
-   (lambda (data arg) data)
-   (lambda (data res) data)
+   (lambda (data chs arg n) data)
+   (lambda (data chs res n) data)
    (lambda (data chi n) data))
   (list 0
-   (lambda (data arg) data)
-   (lambda (data res) data)
+   (lambda (data chs arg n) data)
+   (lambda (data chs res n) data)
    (lambda (data chi n) (box-width ((node-text-func n) n))))
   (list 0
-   (lambda (data arg) data)
-   (lambda (data res) data)
+   (lambda (data chs arg n) data)
+   (lambda (data chs res n) data)
    (lambda (data chi n) (box-height ((node-text-func n) n))))))
 
 (struct other-v11n-utterance cartesian-utterance (total-height))
@@ -71,32 +71,32 @@
 (define (linear-vertical-utterance-generator n tree)
  (generic-utterance-generator n tree other-v11n-utterance
   (list 0
-   (lambda (data arg) (+ data 10))
-   (lambda (data res) data)
+   (lambda (data chs arg n) (+ data 10))
+   (lambda (data chs res n) data)
    (lambda (data chi n) data))
   (list 0
-   (lambda (data arg) (+ CELLHEIGHT data))
-   (lambda (data res) (+ data (other-v11n-utterance-total-height res)))
+   (lambda (data chs arg n) (+ CELLHEIGHT data))
+   (lambda (data chs res n) (+ data (other-v11n-utterance-total-height res)))
    (lambda (data chi n) data))
   (list 0
-   (lambda (data arg) data)
-   (lambda (data res) data)
+   (lambda (data chs arg n) data)
+   (lambda (data chs res n) data)
    (lambda (data chi n) (box-width ((node-text-func n) n))))
   (list CELLHEIGHT
-   (lambda (data arg) data)
-   (lambda (data res) data)
+   (lambda (data chs arg n) data)
+   (lambda (data chs res n) data)
    (lambda (data chi n) data))
   (list 0
-   (lambda (data arg) data)
-   (lambda (data res) data)
+   (lambda (data chs arg n) data)
+   (lambda (data chs res n) data)
    (lambda (data chi n) (box-width ((node-text-func n) n))))
   (list 0
-   (lambda (data arg) data)
-   (lambda (data res) data)
+   (lambda (data chs arg n) data)
+   (lambda (data chs res n) data)
    (lambda (data chi n) (box-height ((node-text-func n) n))))
   (list 0
-   (lambda (data arg) data)
-   (lambda (data res) data)
+   (lambda (data chs arg n) data)
+   (lambda (data chs res n) data)
    (lambda (data chi n) (apply + CELLHEIGHT (map other-v11n-utterance-total-height chi))))))
 
 (define (generic-utterance-generator n tree utterance-constructor . chrs)
@@ -114,8 +114,8 @@
               (let ((res (node->utterance
                           arg
                           tree
-                          (map (curryr apply (list arg)) make-children (cdr data)))))
-               (cons (append (car data) (list res)) (map (curryr apply (list res)) updates (cdr data)))))
+                          (map (curryr apply (list characteristics arg n)) make-children (cdr data)))))
+               (cons (append (car data) (list res)) (map (curryr apply (list characteristics res n)) updates (cdr data)))))
 	     (cons '() characteristics)
 	     (node-args n))))))
     (apply
