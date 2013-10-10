@@ -5,11 +5,7 @@
 (require "def-painter.ss")
 (require "stdlib.rkt")
 
-(provide make-linear-vertical-v11n other-v11n-utterance-total-height other-v11n-utterance-runtime-vals)
-
-;(struct cartesian-utterance utterance (x y w h text-w text-h))
-
-(struct other-v11n-utterance cartesian-utterance (total-height runtime-vals))
+(provide make-linear-vertical-v11n other-v11n-utterance-total-height)
 
 (define (make-linear-vertical-v11n #:rectangle-drawer (drawer draw-rectangle-u) #:text-generator (text-generator straight-text))
  (v11n
@@ -18,44 +14,7 @@
     (lambda (u tree)
      (generic-drawer u tree #:drawer drawer #:text text-generator)))
 
-  (lambda (n tree)
-   (let node->utterance ((n n) (x 0) (y 0) (row 0) (siblings '()) (tree tree))
-    (let ((children 
-           (if (closed? n tree)
-            '()
-            (cadr
-             (foldl
-              (lambda (arg data)
-               (let ((res (node->utterance
-                           arg
-                           (+ x 10)
-                           (car data)
-                           (+ 1 row)
-                           (- (length (node-args n)) 1)
-                           tree)))
-                (if (null? res)
-                 (list
-                  0
-                  (cadr data))
-                 (list
-                  (+ (car data) (other-v11n-utterance-total-height res))
-                  (append
-                   (cadr data)
-                   (list res))))))
-              (list (+ y (node-height n tree)) '())
-              (node-args n))))))
-     (other-v11n-utterance
-      n
-      children
-      (get-color n tree)
-      x
-      y
-      (box-width ((node-text-func n) n))
-      (node-height n tree)
-      (box-width ((node-text-func n) n))
-      (box-height ((node-text-func n) n))
-      (foldl + (node-height n tree) (map other-v11n-utterance-total-height children))
-      (map cadr (list-ref (node-data n) 7))))))
+  linear-vertical-utterance-generator
 
   (lambda (root x y tree)
    (let find-utterance ((root root) (x x) (y y))
