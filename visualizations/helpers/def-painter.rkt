@@ -98,19 +98,15 @@
     )
 
    (utterance-paint (u tree)
-    (let* ((text ((node-text-func (utterance-node u)) (utterance-node u)))
-           (x (cartesian-utterance-x u))
+    (let* ((x (cartesian-utterance-x u))
            (y (cartesian-utterance-y u))
            (w (cartesian-utterance-w u))
            (h (cartesian-utterance-h u))
-           (text-w (cartesian-utterance-text-w u))
-           (text-h (cartesian-utterance-text-h u))
-           (args (utterance-args u))
-           (clr (utterance-clr u)))
+           (args (utterance-args u)))
      (if (invisible? x y w h tree)
       '()
       (begin
-       (drawer text x y w h text-w text-h clr u tree center)
+       (drawer u tree)
 ;       (draw-rectangle (if (eq? Selected-tree tree) (cdr clr) (map (curryr / 3) (cdr clr))) x y w h)
 ;       (if (< (whole-tree-zoom tree) 1) '()
 ;        (draw-text

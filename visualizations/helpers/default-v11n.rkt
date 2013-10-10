@@ -2,7 +2,8 @@
 
 (require sgl sgl/gl)
 (require "../../core/common.rkt")
-(require "def-painter.ss")
+(require "def-painter.rkt")
+(require "stdlib.rkt")
 
 (provide make-default-v11n cartesian-utterance-x cartesian-utterance-y cartesian-utterance-w cartesian-utterance-h cartesian-utterance-text-w cartesian-utterance-text-h)
 
@@ -12,16 +13,8 @@
  (v11n
   (def-painter
    #:drawer
-    (lambda (text x y w h text-w text-h clr u tree center)
-     (draw-rectangle (if (eq? Selected-tree tree) (cdr clr) (map (curryr / 3) (cdr clr))) x y w h)
-     (if (and (<= (/ (- text-w PADDING) (whole-tree-zoom tree)) w)
-              (<= (/ text-h (whole-tree-zoom tree)) h))
-      (draw-text
-       text
-       (center x w (- text-w PADDING) (- (whole-tree-offset-x tree)) (whole-tree-w tree))
-       (+ text-h -3 (center y h text-h (- (whole-tree-offset-y tree)) (whole-tree-h tree)))
-       (car clr))
-      '())))
+    (lambda (u tree)
+     (generic-drawer u tree)))
 
   (lambda (n tree)
    (let node->utterance ((n n) (x 0) (y 0) (w 0) (row 0) (siblings '()) (tree tree))

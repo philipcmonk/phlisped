@@ -3,6 +3,7 @@
 (require sgl sgl/gl)
 (require "../../core/common.rkt")
 (require "def-painter.ss")
+(require "stdlib.rkt")
 
 (provide make-linear-vertical-v11n other-v11n-utterance-total-height other-v11n-utterance-runtime-vals)
 
@@ -10,29 +11,12 @@
 
 (struct other-v11n-utterance cartesian-utterance (total-height runtime-vals))
 
-(define (make-linear-vertical-v11n #:rectangle-drawer (rectangle-drawer values) #:text-generator (text-generator (lambda (text) text)))
+(define (make-linear-vertical-v11n #:rectangle-drawer (drawer draw-rectangle-u) #:text-generator (text-generator straight-text))
  (v11n
   (def-painter
    #:drawer 
-    (lambda (text x y w h text-w text-h clr u tree center)
-     (rectangle-drawer clr x y w h tree)
-     (if (and (< (/ (- text-w PADDING) (whole-tree-zoom tree)) w)
-              (< (/ text-h (whole-tree-zoom tree)) h))
-      (draw-text
-       (text-generator text)
-       (center x w (- text-w PADDING) (- (whole-tree-offset-x tree)) (whole-tree-w tree))
-       (+ text-h -3 (center y h text-h (- (whole-tree-offset-y tree)) (whole-tree-h tree)))
-       (car clr))
-      '())
-     (map
-      (lambda (val n)
-       (draw-text
-        (format "~a" val)
-        (+ x w 100 (* 40 n))
-       (* (whole-tree-zoom tree) (+ text-h -3 (center y h text-h (- (whole-tree-offset-y tree)) (whole-tree-h tree))))
-        (car clr)))
-      (other-v11n-utterance-runtime-vals u)
-      (build-list (length (other-v11n-utterance-runtime-vals u)) identity))))
+    (lambda (u tree)
+     (generic-drawer u tree #:drawer drawer #:text text-generator)))
 
   (lambda (n tree)
    (let node->utterance ((n n) (x 0) (y 0) (row 0) (siblings '()) (tree tree))
