@@ -24,19 +24,19 @@
            (is-to-the-right-of-utterance?))
        root
        (pass-on-to-child)))
-   
+
      (above-bottom-of-utterance? ()
       (< (min-dim x y) (+ (cartesian-utterance-min-dim root) (cartesian-utterance-min-dim-span root))))
-   
+
      (utterance-is-closed? ()
       (closed? (utterance-node root) tree))
-           
+
      (has-no-children? ()
       (null? (node-args (utterance-node root))))
-   
+
      (is-to-the-right-of-utterance? ()
       (>= (maj-dim x y) (let ((baby (last (utterance-args root)))) (+ (cartesian-utterance-maj-dim baby) (cartesian-utterance-maj-dim-span baby)))))
-   
+
      (pass-on-to-child ()
       (ormap
        (lambda (child)
@@ -45,16 +45,17 @@
          #f))
        (utterance-args root))))))
 
-  (lambda (dir event)
-   (cond
-    ((eq? dir 'up)
-     (set-whole-tree-offset-x! Selected-tree (+ SCROLLDIST (whole-tree-offset-x Selected-tree))))
-    ((eq? dir 'down)
-     (set-whole-tree-offset-x! Selected-tree (+ (- SCROLLDIST) (whole-tree-offset-x Selected-tree))))
-    ((eq? dir 'left)
-     (set-whole-tree-offset-y! Selected-tree (+ SCROLLDIST (whole-tree-offset-y Selected-tree))))
-    ((eq? dir 'right)
-     (set-whole-tree-offset-y! Selected-tree (+ (- SCROLLDIST) (whole-tree-offset-y Selected-tree))))))))
+  horiz-scroller))
+;  (lambda (dir event)
+;   (cond
+;    ((eq? dir 'up)
+;     (set-whole-tree-offset-x! Selected-tree (+ SCROLLDIST (whole-tree-offset-x Selected-tree))))
+;    ((eq? dir 'down)
+;     (set-whole-tree-offset-x! Selected-tree (+ (- SCROLLDIST) (whole-tree-offset-x Selected-tree))))
+;    ((eq? dir 'left)
+;     (set-whole-tree-offset-y! Selected-tree (+ SCROLLDIST (whole-tree-offset-y Selected-tree))))
+;    ((eq? dir 'right)
+;     (set-whole-tree-offset-y! Selected-tree (+ (- SCROLLDIST) (whole-tree-offset-y Selected-tree))))))))
 
 (define (cartesian-utterance-maj-dim u) (if VERTICAL (cartesian-utterance-y u) (cartesian-utterance-x u)))
 (define (cartesian-utterance-maj-dim-span u) (if VERTICAL (cartesian-utterance-h u) (cartesian-utterance-w u)))

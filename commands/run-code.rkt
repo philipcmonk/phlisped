@@ -1,7 +1,7 @@
 #lang racket
 
 (require "../core/common.rkt")
-(require (except-in "../core/extractdata.rkt" with))
+(require "../core/extractdata.rkt")
 (require "../core/gnode.rkt")
 (require "../core/compiler.rkt")
 

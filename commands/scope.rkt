@@ -1,7 +1,7 @@
 #lang racket
 
 (require "../core/common.rkt")
-(require (except-in "../core/extractdata.rkt" with LINK1 LINK1PARENT LINK1ADDR))
+(require (except-in "../core/extractdata.rkt" LINK1 LINK1PARENT LINK1ADDR))
 (require "../core/gnode.rkt")
 (require "../core/disp.rkt")
 

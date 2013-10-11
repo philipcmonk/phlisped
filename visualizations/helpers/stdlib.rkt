@@ -125,3 +125,24 @@
      (get-color n tree)
      (map (curryr apply children (list n)) finals characteristics))))))
 
+(define (horiz-scroller dir event)
+ (cond
+  ((eq? dir 'up)
+   (set-whole-tree-offset-x! Selected-tree (+ SCROLLDIST (whole-tree-offset-x Selected-tree))))
+  ((eq? dir 'down)
+   (set-whole-tree-offset-x! Selected-tree (+ (- SCROLLDIST) (whole-tree-offset-x Selected-tree))))
+  ((eq? dir 'left)
+   (set-whole-tree-offset-y! Selected-tree (+ SCROLLDIST (whole-tree-offset-y Selected-tree))))
+  ((eq? dir 'right)
+   (set-whole-tree-offset-y! Selected-tree (+ (- SCROLLDIST) (whole-tree-offset-y Selected-tree))))))
+
+(define (vert-scroller dir event)
+ (cond
+  ((eq? dir 'up)
+   (set-whole-tree-offset-y! Selected-tree (+ SCROLLDIST (whole-tree-offset-y Selected-tree))))
+  ((eq? dir 'down)
+   (set-whole-tree-offset-y! Selected-tree (+ (- SCROLLDIST) (whole-tree-offset-y Selected-tree))))
+  ((eq? dir 'left)
+   (set-whole-tree-offset-x! Selected-tree (+ (- SCROLLDIST) (whole-tree-offset-x Selected-tree))))
+  ((eq? dir 'right)
+   (set-whole-tree-offset-x! Selected-tree (+ SCROLLDIST (whole-tree-offset-x Selected-tree))))))

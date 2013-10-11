@@ -3,7 +3,7 @@
 (require "gnode.rkt" "graph.rkt" "disp.rkt" "compiler.rkt")
 (require racket/set)
 
-(provide Thecanvas Info (all-defined-out) update-childfuncs for-all-trees semantic-go)
+(provide Thecanvas Info (except-out (all-defined-out) with) update-childfuncs for-all-trees semantic-go)
 
 (define GRFILE "visualizations/hyperbolic-disk.phl")
 
