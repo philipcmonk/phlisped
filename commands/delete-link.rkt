@@ -4,7 +4,7 @@
 (require "../core/extractdata.rkt")
 (require "../core/gnode.rkt")
 
-(provide data)
+(provide data delete-link)
 
 (define (delete-link event)
  (let* ((id (selected-id Selected-tree))

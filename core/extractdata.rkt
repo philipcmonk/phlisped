@@ -3,9 +3,9 @@
 (require "gnode.rkt" "graph.rkt" "disp.rkt" "compiler.rkt")
 (require racket/set)
 
-(provide Thecanvas Info (except-out (all-defined-out) with) update-childfuncs for-all-trees semantic-go)
+(provide Thecanvas Info (except-out (all-defined-out) with) update-childfuncs for-all-trees semantic-go key-evs)
 
-(define GRFILE "visualizations/hyperbolic-disk.phl")
+(define GRFILE "commands/interlocute-parent.phl")
 
 (define NEWCODE #f)
 
@@ -183,6 +183,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
  
 (define (child-fun a)
+; (displayln a)
  (map
   get-rep
   (let ((gn (hash-ref G (car a))))
@@ -200,10 +201,10 @@
    '(to be implemented))
 
   (get-free-variables ()
-   (hash-ref free-variables id))
+   (hash-ref free-variables id '()))
 
   (get-bound-variables ()
-   (hash-ref bound-variables id))
+   (hash-ref bound-variables id '()))
 
   (lex-chi ()
    (lexical-children id))

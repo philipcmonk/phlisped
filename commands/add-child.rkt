@@ -7,7 +7,7 @@
 
 (provide data add-child)
 
-(define add-child
+(define add-child-ev
  (event
   (lambda (g id parent-id)
    ((compose
@@ -42,6 +42,8 @@
 ;   #:selection-updater (lambda ()
 ;                        (semantic-go 'down Selected-tree)))))
 
+(define add-child (event-wrapper add-child-ev))
+
 (define data
- (list #\( (event-wrapper add-child)))
+ (list #\( add-child))
 

@@ -14,16 +14,16 @@
 
 (define (graph-add-child-beg g id cid)
  (let ((gn (hash-ref g id)))
-  (hash-set g id (parent-gnode id (gnode-name gn) (cons Next-id (if (parent-gnode? gn) (parent-gnode-childs gn) '())) (if (parent-gnode? gn) (parent-gnode-vars gn) '())))))
-	
+  (hash-set g id (parent-gnode id (gnode-name gn) (cons cid (if (parent-gnode? gn) (parent-gnode-childs gn) '())) (if (parent-gnode? gn) (parent-gnode-vars gn) '())))))
+        
 (define (graph-add-child-after g id cid nid)
  (let ((gn (hash-ref g id)))
   (hash-set g id (parent-gnode id (gnode-name gn) (replace cid (list cid nid) (if (parent-gnode? gn) (parent-gnode-childs gn) '())) (if (parent-gnode? gn) (parent-gnode-vars gn) '())))))
 
 (define (event-wrapper ev)
  (lambda (e)
-  (let ((id (selected-id Selected-tree))
-	(parent-id (selected-parent-id Selected-tree)))
+  (let* ((id (selected-id Selected-tree))
+         (parent-id (if (zero? id) 0 (selected-parent-id Selected-tree))))
    (updater
     #:graph-changer
     (lambda ()

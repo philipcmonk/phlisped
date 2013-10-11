@@ -7,7 +7,7 @@
 
 (provide data add-sibling)
 
-(define add-sibling
+(define add-sibling-ev
  (event
   (lambda (g id parent-id)
    ((compose
@@ -51,6 +51,8 @@
 ;                                                 (set (append (drop-right (whole-tree-selection Selected-tree) 1) (list (+ 1 (last (whole-tree-selection Selected-tree)))))))))))
 ;   #:selection-updater (lambda () (semantic-go 'right Selected-tree)))))
 
+(define add-sibling (event-wrapper add-sibling-ev))
+
 (define data
- (list #\space (event-wrapper add-sibling)))
+ (list #\space add-sibling))
 

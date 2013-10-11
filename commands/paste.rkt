@@ -1,18 +1,19 @@
 #lang racket
 
 (require "../core/common.rkt")
+(require "../core/commands-common.rkt")
 (require "../core/extractdata.rkt")
 (require "../core/gnode.rkt")
 (require "../core/disp.rkt")
 
-(provide data)
+(provide data handle-paste)
 
 (define (paste event)
  (enter-paste-mode))
 
-(define (handle-paste event)
+(define (handle-paste event (char '()))
  (with
-  ((let ((c (send event get-key-code)))
+  ((let ((c (if (null? char) (send event get-key-code) char)))
     (cond
      ((eq? c #\j)
       (make-paste-below (selected-id Selected-tree) (whole-tree-selection Selected-tree))
@@ -36,7 +37,8 @@
     (updater
      #:graph-changer (lambda ()
                       (let ((pgn (hash-ref G parent-id)))
-		       (set-G (hash-set G parent-id (parent-gnode parent-id (gnode-name pgn) (replace child-id (list child-id (pop-clipboard)) (parent-gnode-childs pgn)) (parent-gnode-vars pgn))))))
+		       (set-G (graph-add-child-after G parent-id child-id (pop-clipboard)))))
+;		       (set-G (hash-set G parent-id (parent-gnode parent-id (gnode-name pgn) (replace child-id (list child-id (pop-clipboard)) (parent-gnode-childs pgn)) (parent-gnode-vars pgn))))))
      #:open-updater  (lambda ()
                       (for-all-trees
                        (lambda (tree)
@@ -56,7 +58,7 @@
    (updater
     #:graph-changer     (lambda ()
                          (let ((pgn (hash-ref G parent-id)))
-			  (set-G (hash-set G parent-id (parent-gnode parent-id (gnode-name pgn) (cons (pop-clipboard) (parent-gnode-childs pgn)) (parent-gnode-vars pgn))))))
+			  (set-G (graph-add-child-beg G parent-id (pop-clipboard)))))
     #:open-updater      (lambda ()
                          (set-whole-tree-open! Selected-tree (set-union (whole-tree-open Selected-tree) (set parent-laddr))))
     #:selection-updater (lambda ()

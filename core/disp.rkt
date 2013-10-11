@@ -544,7 +544,7 @@
 (define (update-childfuncs childfunc)
  (map (curryr set-whole-tree-childfunc! childfunc) (cdr Trees))
  (map (lambda (t) (set-whole-tree-n-tree! t (root->node (node-data (whole-tree-n-tree t)) childfunc (node-laddr (whole-tree-n-tree t))))) (cdr Trees))
- (map generate-utterance-tree(cdr Trees))
+ (map generate-utterance-tree (cdr Trees))
  (send Thecanvas on-paint))
 
 (define (add-to-screen root childfunc)
