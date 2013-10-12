@@ -13,7 +13,6 @@
   (filter (lambda (t) (regexp-match? regex (format "~a" (cadr t)))) texts)))
 
 (define Search-text "")
-(define Search-tree '())
 
 (define (search event)
  (set! Search-text "")

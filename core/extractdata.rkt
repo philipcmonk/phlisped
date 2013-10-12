@@ -11,8 +11,6 @@
 
 (define X 0)
 (define Y 0)
-(define WIDTH (* 1 1600))
-(define HEIGHT 899)
 
 (define Next-id 100)
 
