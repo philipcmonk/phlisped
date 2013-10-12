@@ -24,5 +24,5 @@
 
 (define data
  (list 
-  #\v (curry interlocute-lambda #f)
-  #\L (curry interlocute-lambda #t)))
+  '(#\v make-variable) (curry interlocute-lambda #f)
+  '(#\L make-lambda) (curry interlocute-lambda #t)))

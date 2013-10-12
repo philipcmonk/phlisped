@@ -10,5 +10,5 @@
  (graph->file G))
 
 (define data
- (list 'f2 write-g-to-file))
+ (list '(f2 write w) write-g-to-file))
 

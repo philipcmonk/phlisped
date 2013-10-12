@@ -45,5 +45,5 @@
 (define add-child (event-wrapper add-child-ev))
 
 (define data
- (list #\( add-child))
+ (list '(#\( add-child) add-child))
 

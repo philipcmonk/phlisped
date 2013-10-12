@@ -66,6 +66,6 @@
 
 (define data
  (list
-  #\p paste
-  'paste handle-paste))
+  '(#\p enter-paste) paste
+  '(paste) handle-paste))
 

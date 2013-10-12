@@ -69,35 +69,35 @@
 
 (define data
  (list
-    #\n new-tree
-    #\N replace-major-tree
-    #\tab select-new-tree
-    #\q (lambda (_) (remove-tree Selected-tree))
-    #\h (lambda (_) (go 'left Selected-tree))
-    #\j (lambda (_) (go 'down Selected-tree))
-    #\k (lambda (_) (go 'up Selected-tree))
-    #\l (lambda (_) (go 'right Selected-tree))
-    #\A (lambda (_) (semantic-go 'left Selected-tree))
-    #\S (lambda (_) (semantic-go 'down Selected-tree))
-    #\W (lambda (_) (semantic-go 'up Selected-tree))
-    #\D (lambda (_) (semantic-go 'right Selected-tree))
-    #\o (lambda (_) (open-u (whole-tree-selection-u Selected-tree) #f Selected-tree) (send Thecanvas on-paint))
-    #\c (lambda (_) (close-u (whole-tree-selection-u Selected-tree) #f Selected-tree) (send Thecanvas on-paint))
-    #\O (lambda (_) (open-u (whole-tree-selection-u Selected-tree) #t Selected-tree) (send Thecanvas on-paint))
-    #\C (lambda (_) (close-u (whole-tree-selection-u Selected-tree) #t Selected-tree) (send Thecanvas on-paint))
-    #\z zoom-out
-    #\V cycle-v11n
-    #\0 (curry nth-child 0)
-    #\1 (curry nth-child 1)
-    #\2 (curry nth-child 2)
-    #\3 (curry nth-child 3)
-    #\4 (curry nth-child 4)
-    #\5 (curry nth-child 5)
-    #\6 (curry nth-child 6)
-    #\7 (curry nth-child 7)
-    #\8 (curry nth-child 8)
-    #\9 (curry nth-child 9)
-    'wheel-up (lambda (event)
+    '(#\n new-tree) new-tree
+    '(#\N relace-major-tree) replace-major-tree
+    '(#\tab cycle-tree) select-new-tree
+    '(#\q close-tree) (lambda (_) (remove-tree Selected-tree))
+    '(#\h left) (lambda (_) (go 'left Selected-tree))
+    '(#\j down) (lambda (_) (go 'down Selected-tree))
+    '(#\k up) (lambda (_) (go 'up Selected-tree))
+    '(#\l right) (lambda (_) (go 'right Selected-tree))
+    '(#\A semantic-left) (lambda (_) (semantic-go 'left Selected-tree))
+    '(#\S semantic-down) (lambda (_) (semantic-go 'down Selected-tree))
+    '(#\W semantic-up) (lambda (_) (semantic-go 'up Selected-tree))
+    '(#\D semantic-right) (lambda (_) (semantic-go 'right Selected-tree))
+    '(#\o shallow-open) (lambda (_) (open-u (whole-tree-selection-u Selected-tree) #f Selected-tree) (send Thecanvas on-paint))
+    '(#\c shallow-close) (lambda (_) (close-u (whole-tree-selection-u Selected-tree) #f Selected-tree) (send Thecanvas on-paint))
+    '(#\O deep-open) (lambda (_) (open-u (whole-tree-selection-u Selected-tree) #t Selected-tree) (send Thecanvas on-paint))
+    '(#\C deep-close) (lambda (_) (close-u (whole-tree-selection-u Selected-tree) #t Selected-tree) (send Thecanvas on-paint))
+    '(#\z zoom) zoom-out
+    '(#\V cycle-v11n) cycle-v11n
+    '(#\0 0) (curry nth-child 0)
+    '(#\1 1) (curry nth-child 1)
+    '(#\2 2) (curry nth-child 2)
+    '(#\3 3) (curry nth-child 3)
+    '(#\4 4) (curry nth-child 4)
+    '(#\5 5) (curry nth-child 5)
+    '(#\6 6) (curry nth-child 6)
+    '(#\7 7) (curry nth-child 7)
+    '(#\8 8) (curry nth-child 8)
+    '(#\9 9) (curry nth-child 9)
+    '(wheel-up) (lambda (event)
                (if (or (send event get-control-down) (send event get-shift-down) (send event get-meta-down))
                 (begin
                  (if (send event get-control-down)
@@ -112,7 +112,7 @@
                  (generate-utterance-tree Selected-tree))
                 ((v11n-wheel (whole-tree-v11n Selected-tree)) 'up event))
                (send Thecanvas on-paint))
-    'wheel-down (lambda (event)
+    '(wheel-down) (lambda (event)
                  (if (or (send event get-control-down) (send event get-shift-down) (send event get-meta-down))
                   (begin
                    (if (send event get-control-down)
@@ -127,7 +127,7 @@
                    (generate-utterance-tree Selected-tree))
                   ((v11n-wheel (whole-tree-v11n Selected-tree)) 'down event))
                  (send Thecanvas on-paint))
-    'wheel-left (lambda (event) ((v11n-wheel (whole-tree-v11n Selected-tree)) 'left event) (send Thecanvas on-paint))
-    'wheel-right (lambda (event) ((v11n-wheel (whole-tree-v11n Selected-tree)) 'right event) (send Thecanvas on-paint))
+    '(wheel-left) (lambda (event) ((v11n-wheel (whole-tree-v11n Selected-tree)) 'left event) (send Thecanvas on-paint))
+    '(wheel-right) (lambda (event) ((v11n-wheel (whole-tree-v11n Selected-tree)) 'right event) (send Thecanvas on-paint))
     ))
 

@@ -62,6 +62,6 @@
 
 (define data
  (list
-  #\a argify
-  'argify handle-argify))
+  '(#\a enter-argify) argify
+  '(argify) handle-argify))
 

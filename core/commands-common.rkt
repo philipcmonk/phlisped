@@ -36,3 +36,10 @@
      ((event-selection-updater ev))
      (set-Next-id (+ Next-id (event-ids-consumed ev))))))))
 
+(define (distributor h event)
+ (let ((c (send event get-key-code)))
+  (if (hash-has-key? h c)
+   ((hash-ref h c) event)
+   (when (hash-has-key? h 'else)
+    ((hash-ref h 'else) event)))))
+

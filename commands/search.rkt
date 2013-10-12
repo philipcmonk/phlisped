@@ -55,5 +55,5 @@
 
 (define data
  (list
-  #\/ search
-  'search handle-search))
+  '(#\/ enter-search) search
+  '(search) handle-search))

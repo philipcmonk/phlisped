@@ -5,7 +5,7 @@
 
 (provide Thecanvas Info (except-out (all-defined-out) with) update-childfuncs for-all-trees semantic-go key-evs)
 
-(define GRFILE "commands/interlocute-parent.phl")
+(define GRFILE "commands/command-line.phl")
 
 (define NEWCODE #f)
 

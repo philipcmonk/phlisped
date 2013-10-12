@@ -32,7 +32,7 @@
 
 (define data
  (list
-  #\u undo-pop
-  #\R redo-pop))
+  '(#\u undo) undo-pop
+  '(#\R redo) redo-pop))
 
 

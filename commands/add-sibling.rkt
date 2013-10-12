@@ -54,5 +54,5 @@
 (define add-sibling (event-wrapper add-sibling-ev))
 
 (define data
- (list #\space add-sibling))
+ (list '(#\space add-sibling) add-sibling))
 

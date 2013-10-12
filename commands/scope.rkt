@@ -48,6 +48,6 @@
 
 (define data
  (list
-  #\s set-scope
-  'scope handle-scope))
+  '(#\s enter-scope) set-scope
+  '(scope) handle-scope))
 

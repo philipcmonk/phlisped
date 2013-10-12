@@ -21,5 +21,5 @@
   (update-childfuncs child-fun)))
 
 (define data
- (list #\G run-code))
+ (list '(#\G run) run-code))
 

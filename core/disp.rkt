@@ -6,7 +6,7 @@
 
 (require "common.rkt")
 
-(provide my-canvas% box-width box-height box-maj-dim node-width node-height node-maj-dim VERTICAL display-on-screen add-to-screen Thecanvas Info Selected-tree utterance-parent utterance-node utterance-args node-data node-laddr whole-tree-selection-u whole-tree-selection set-whole-tree-selection! whole-tree-open set-whole-tree-open! whole-tree-utterance-tree add-key-evs key-evs update-childfuncs set-info enter-insert-mode exit-insert-mode enter-scope-mode exit-scope-mode enter-argify-mode exit-argify-mode enter-search-mode exit-search-mode enter-paste-mode exit-paste-mode set-search-results Search-results show-search-tree scroll-search-results remove-search-tree paint-info semantic-go find-utterance-from-laddr-safe for-all-trees remove-tree open-u close-u cycle-v11n set-VAR1 set-VAR2 set-VAR3 VAR1 VAR2 VAR3 VAR1OFFSET VAR2OFFSET VAR3OFFSET VAR1MIN VAR2MIN VAR3MIN VAR1MAX VAR2MAX VAR3MAX generate-utterance-tree select Trees root->node)
+(provide my-canvas% box-width box-height box-maj-dim node-width node-height node-maj-dim VERTICAL display-on-screen add-to-screen Thecanvas Info Selected-tree utterance-parent utterance-node utterance-args node-data node-laddr whole-tree-selection-u whole-tree-selection set-whole-tree-selection! whole-tree-open set-whole-tree-open! whole-tree-utterance-tree add-key-evs key-evs update-childfuncs set-info push-mode pop-mode enter-insert-mode exit-insert-mode enter-scope-mode exit-scope-mode enter-argify-mode exit-argify-mode enter-search-mode exit-search-mode enter-paste-mode exit-paste-mode set-search-results Search-results show-search-tree scroll-search-results remove-search-tree paint-info semantic-go find-utterance-from-laddr-safe for-all-trees remove-tree open-u close-u cycle-v11n set-VAR1 set-VAR2 set-VAR3 VAR1 VAR2 VAR3 VAR1OFFSET VAR2OFFSET VAR3OFFSET VAR1MIN VAR2MIN VAR3MIN VAR1MAX VAR2MAX VAR3MAX generate-utterance-tree select Trees root->node)
 
 (define WIDTH (* 1 1600))
 (define HEIGHT 899)
@@ -238,15 +238,10 @@
         '())))
 
    (define/override (on-char event)
-    (cond
-     (INSERTMODE ((hash-ref key-evs 'insert) event))
-     (SCOPEMODE ((hash-ref key-evs 'scope) event))
-     (ARGIFYMODE ((hash-ref key-evs 'argify) event))
-     (SEARCHMODE ((hash-ref key-evs 'search) event))
-     (PASTEMODE ((hash-ref key-evs 'paste) event))
-     ((hash-has-key? key-evs (send event get-key-code))
+    (if (null? Mode)
+     (when (hash-has-key? key-evs (send event get-key-code))
       ((hash-ref key-evs (send event get-key-code)) event))
-     (#t '())))
+     ((hash-ref key-evs (car Mode)) event)))
 
    (super-instantiate () (style '(gl)))
 
@@ -254,35 +249,41 @@
     (lambda ()
      (initialize-font)))))))
 
-(define INSERTMODE #f)
+(define Mode '())
 
-(define (enter-insert-mode) (set! INSERTMODE #t) (set! Search-tree (add-to-screen (list 0 'list '() '() '() '() '() '()) (whole-tree-childfunc Selected-tree))))
+(define (push-mode m)
+ (set! Mode (cons m Mode)))
 
-(define (exit-insert-mode) (set! INSERTMODE #f))
+(define (pop-mode)
+ (let ((res (car Mode)))
+  (set! Mode (cdr Mode))
+  res))
 
-(define SCOPEMODE #f)
+;(define INSERTMODE #f)
 
-(define (enter-scope-mode) (set! SCOPEMODE #t))
+;(define (enter-insert-mode) (set! INSERTMODE #t) (set! Search-tree (add-to-screen (list 0 'list '() '() '() '() '() '()) (whole-tree-childfunc Selected-tree))))
+(define (enter-insert-mode) (push-mode 'insert) (set! Search-tree (add-to-screen (list 0 'list '() '() '() '() '() '()) (whole-tree-childfunc Selected-tree))))
 
-(define (exit-scope-mode) (set! SCOPEMODE #f))
+;(define (exit-insert-mode) (set! INSERTMODE #f))
+(define exit-insert-mode pop-mode)
 
-(define ARGIFYMODE #f)
+;(define SCOPEMODE #f)
 
-(define (enter-argify-mode) (set! ARGIFYMODE #t))
+(define (enter-scope-mode) (push-mode 'scope))
 
-(define (exit-argify-mode) (set! ARGIFYMODE #f))
+(define exit-scope-mode pop-mode)
 
-(define SEARCHMODE #f)
+(define (enter-argify-mode) (push-mode 'argify))
 
-(define (enter-search-mode) (set! SEARCHMODE #t) (set! Search-tree (add-to-screen (list 0 'list '() '() '() '() '() '()) (whole-tree-childfunc Selected-tree))))
+(define exit-argify-mode pop-mode)
 
-(define (exit-search-mode) (set! SEARCHMODE #f))
+(define (enter-search-mode) (push-mode 'search) (set! Search-tree (add-to-screen (list 0 'list '() '() '() '() '() '()) (whole-tree-childfunc Selected-tree))))
 
-(define PASTEMODE #f)
+(define exit-search-mode pop-mode)
 
-(define (enter-paste-mode) (set! PASTEMODE #t))
+(define (enter-paste-mode) (push-mode 'paste))
 
-(define (exit-paste-mode) (set! PASTEMODE #f))
+(define exit-paste-mode pop-mode)
 
 (define (paint-bar u)
  (with

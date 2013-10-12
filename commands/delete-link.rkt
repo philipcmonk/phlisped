@@ -56,5 +56,5 @@
         (curry adjust-laddr-del id (last (whole-tree-selection Selected-tree)) (whole-tree-utterance-tree tree))))))))))
 
 (define data
- (list #\d delete-link))
+ (list '(#\d delete-link) delete-link))
 

@@ -28,7 +28,7 @@
       (scroll-search-results)
       (show-search-tree get-rep)
       (send Thecanvas on-paint))
-     ((and (char? c) (not (char-whitespace? c)) (not (char-iso-control? c)) (not (member c '(#\( #\) #\[ #\] #\{ #\} #\, #\' #\` #\; #\|))))
+     ((and (char? c) (not (char-whitespace? c)) (not (char-iso-control? c)) (not (member c '(#\( #\) #\[ #\] #\{ #\} #\, #\' #\` #\|))))
       (set! INSERTTEXT (string-append INSERTTEXT (string (send event get-key-code))))
       (show-results))
      ((eq? c #\backspace)
@@ -108,6 +108,6 @@
 
 (define data
  (list
-  #\i insert-text
-  'insert handle-insert))
+  '(#\i enter-insert) insert-text
+  '(insert) handle-insert))
 
