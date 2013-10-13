@@ -1,11 +1,11 @@
 #lang racket
 
-(require "gnode.rkt" "graph.rkt" "disp.rkt" "compiler.rkt")
+(require "gnode.rkt" "graph.rkt" "disp.rkt" "compiler.rkt" "common.rkt")
 (require racket/set)
 
-(provide Thecanvas Info (except-out (all-defined-out) with) update-childfuncs for-all-trees semantic-go key-evs)
+(provide Thecanvas Info (all-defined-out) update-childfuncs for-all-trees semantic-go key-evs)
 
-(define GRFILE "commands/command-line.phl")
+(define GRFILE "")
 
 (define NEWCODE #f)
 
@@ -14,20 +14,18 @@
 
 (define Next-id 100)
 
-(define-syntax (with stx)
- (let* ((l (syntax->datum stx))
-        (body (cadr l))
-        (defs (cddr l))
-        (lams (map (lambda (def) `(,(car def) (lambda ,(cadr def) ,@(cddr def)))) defs)))
-  (datum->syntax stx `(letrec ,lams ,@body))))
+;(define-syntax (with stx)
+; (let* ((l (syntax->datum stx))
+;        (body (cadr l))
+;        (defs (cddr l))
+;        (lams (map (lambda (def) `(,(car def) (lambda ,(cadr def) ,@(cddr def)))) defs)))
+;  (datum->syntax stx `(letrec ,lams ,@body))))
 
 (define G '())
 (define (set-G g) (set! G g))
 
 (define (read-file filename)
  (set! G (call-with-input-file filename (lambda (f) (read f)))))
-
-(read-file GRFILE)
 
 (define INSERTTEXT "")
 (define LINK1 '())
@@ -37,7 +35,6 @@
 (define runtime-vals (hash))
 (define (set-runtime-vals vals) (set! runtime-vals vals))
 
-(set! Next-id (hash-ref G 'next-id))
 (define (set-Next-id id) (set! Next-id id))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -156,14 +153,25 @@
 ;;;                                 Undo/Redo                               ;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+(struct state (graph trees selected-tree))
+
 (define UNDOSTACK '())
 (define REDOSTACK '())
 (define (set-UNDOSTACK stack) (set! UNDOSTACK stack))
 (define (set-REDOSTACK stack) (set! REDOSTACK stack))
 
+(define (copy-trees)
+ (map
+  (lambda (tree) (struct-copy whole-tree tree))
+  Trees))
+
+(define (get-selected-tree-index)
+ (- (length (dropf-right Trees (negate (curry eq? Selected-tree)))) 1))
+
 (define (undo-push)
  (set! REDOSTACK '())
- (set! UNDOSTACK (cons (list G (whole-tree-open Selected-tree) (whole-tree-selection Selected-tree)) UNDOSTACK)))
+ (set! UNDOSTACK (cons (state G (copy-trees) (get-selected-tree-index)) UNDOSTACK)))
+; (set! UNDOSTACK (cons (list G (whole-tree-open Selected-tree) (whole-tree-selection Selected-tree)) UNDOSTACK)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;                                 Clipboard                               ;;;
@@ -312,15 +320,20 @@
 ;;;                                                                           Go                                                                            ;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(define (yup)
- (display-on-screen 0 330 WIDTH (- HEIGHT 330) (list 0 'list '() '() '() '() '() '()) child-fun)
- (display "um, so yeah\n"))
-
-(if NEWCODE
- (graph->file G)
- '())
-
-(update-data)
-
-(yup)
+(define (main input-file)
+ (read-file input-file)
+ (set! GRFILE input-file)
+ (set! Next-id (hash-ref G 'next-id))
+ 
+ (define (yup)
+  (display-on-screen 0 330 WIDTH (- HEIGHT 330) (list 0 'list '() '() '() '() '() '()) child-fun)
+  (display "um, so yeah\n"))
+ 
+ (if NEWCODE
+  (graph->file G)
+  '())
+ 
+ (update-data)
+ 
+ (yup))
 

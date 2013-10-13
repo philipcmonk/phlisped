@@ -86,6 +86,7 @@
                              (dummy-utterance (cartesian-utterance dummy-n '() (cons '(0 0 0) '(0 0 0)) 0 0 0 0 0 0 )))
                        (list dummy-n (lambda (a) '()) dummy-utterance (set) '() 800 30 (- WIDTH 600) 300 (cadddr v11ns) 0 0 1)))))
 (set-selected-tree (cadr Trees))
+(define (set-Trees ts) (set! Trees ts))
 (define Bar-tree (cadr Trees))
 
 (define (for-all-trees f)

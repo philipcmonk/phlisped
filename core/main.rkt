@@ -3,6 +3,20 @@
 (require "disp.rkt")
 (require "extractdata.rkt")
 
+(define bg-file "")
+
+(define filename
+ (command-line
+  #:program "phlisped"
+  #:once-each
+  (("-b" "--background") background-file "background image (as used by visualization) (not implemented)"
+   (set! bg-file background-file))
+  #:args
+  (filename)
+  filename))
+
+(main filename)
+
 (require (for-syntax racket/system))
 (define-syntax (require-dir syn)
  (let* ((dir (cadr (syntax->datum syn)))
