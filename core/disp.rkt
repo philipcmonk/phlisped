@@ -480,10 +480,10 @@
  (gl-translate 0 5 0)
  (ftglRenderFont Font (substring text 0 (min (string-length text) 200)) 65535)
  (gl-pop-matrix)
+ (gl-disable 'scissor-test)
  (if swap
-  (send Thecanvas swap-gl-buffers)
-  '())
- (gl-disable 'scissor-test))
+  (send Thecanvas on-paint)
+  '()))
 
 (define (in? dim x y)
  (and (> x (car dim)) (> y (cadr dim)) (< x (+ (car dim) (caddr dim))) (< y (+ (cadr dim) (cadddr dim)))))
@@ -524,7 +524,7 @@
 ;(define Font #f)
 
 (define (initialize-font)
- (set-font (ftglCreateTextureFont "/home/philip/olddesktop/vilisp/VeraMono.ttf"))
+ (set-font (ftglCreateTextureFont "/home/philip/oldhome/olddesktop/vilisp/VeraMono.ttf"))
  (ftglSetFontFaceSize Font 12 72))
 
 (define Mouse-pos (cons -1 -1))
